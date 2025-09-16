@@ -1,11 +1,3 @@
-<?php
-require_once __DIR__ . '/../db_conn.php';
-require_once __DIR__ . '/../common/csrf.php';
-session_start();
-if (empty($_SESSION['login']) && empty($_SESSION['id'])) {
-  echo "<meta http-equiv='refresh' content='0;URL=/index.php' />"; exit;
-}
-?>
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -24,7 +16,7 @@ if (empty($_SESSION['login']) && empty($_SESSION['id'])) {
         <form action="save.php" method="POST">
             <div class="form-group">
                 <label for="firstname">Имя</label>
-                <input type="text" id="firstname" name="firstname" required>
+                <input type="text" id="firstname" name="name" required>
             </div>
             <div class="form-group">
                 <label for="lastname">Фамилия</label>
@@ -35,9 +27,38 @@ if (empty($_SESSION['login']) && empty($_SESSION['id'])) {
             <div class="form-group">
                 <label for="schedule1">Расписание (24-часовой формат)</label>
                 <div class="time-picker">
-                    <input type="time" id="schedule1" name="schedule1" required>
-                    <input type="time" id="schedule2" name="schedule2">
-                    <input type="time" id="schedule3" name="schedule3">
+                    <input type="time" id="schedule1" name="time1" required>
+                    <select name="day1">
+                        <option value="Понедельник">Понедельник</option>
+                        <option value="Вторник">Вторник</option>
+                        <option value="Среда">Среда</option>
+                        <option value="Четверг">Четверг</option>
+                        <option value="Пятница">Пятница</option>
+                        <option value="Суббота">Суббота</option>
+                        <option value="Воскресенье">Воскресенье</option>
+                    </select>
+
+                    <input type="time" id="schedule2" name="time2">
+                    <select name="day2">
+                        <option value="Понедельник">Понедельник</option>
+                        <option value="Вторник">Вторник</option>
+                        <option value="Среда">Среда</option>
+                        <option value="Четверг">Четверг</option>
+                        <option value="Пятница">Пятница</option>
+                        <option value="Суббота">Суббота</option>
+                        <option value="Воскресенье">Воскресенье</option>
+                    </select>
+
+                    <input type="time" id="schedule3" name="time3">
+                    <select name="day3">
+                        <option value="Понедельник">Понедельник</option>
+                        <option value="Вторник">Вторник</option>
+                        <option value="Среда">Среда</option>
+                        <option value="Четверг">Четверг</option>
+                        <option value="Пятница">Пятница</option>
+                        <option value="Суббота">Суббота</option>
+                        <option value="Воскресенье">Воскресенье</option>
+                    </select>
                 </div>
             </div>
 
