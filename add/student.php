@@ -21,7 +21,7 @@ if (empty($_SESSION['login']) && empty($_SESSION['id'])) {
 
     <div class="content">
         <h1>Добавить ученика</h1>
-        <form action="process_student.php" method="POST">
+        <form action="save.php" method="POST">
             <div class="form-group">
                 <label for="firstname">Имя</label>
                 <input type="text" id="firstname" name="firstname" required>
