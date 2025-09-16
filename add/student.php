@@ -36,7 +36,7 @@ if (empty($_SESSION['login']) && empty($_SESSION['id'])) {
                 <label for="schedule1">Расписание (24-часовой формат)</label>
                 <div class="time-picker">
                     <input type="time" id="schedule1" name="time1" required>
-                    <select name="day1">
+                    <select name="day1" required>
                         <option value="Понедельник">Понедельник</option>
                         <option value="Вторник">Вторник</option>
                         <option value="Среда">Среда</option>
