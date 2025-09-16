@@ -28,48 +28,58 @@ HAVING balance_lessons < 0
 ORDER BY balance_lessons ASC
 ")->fetch_all(MYSQLI_ASSOC);
 ?>
+
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-<meta charset="utf-8"><title>Главная — Tutor CRM</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<link href="/profile/css/style.css" rel="stylesheet">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Главная — Tutor CRM</title>
+    <link href="/profile/css/style.css" rel="stylesheet">
 </head>
 <body>
-<div class="content">
-  <div class="card">
-    <h2>Кто приходит сегодня</h2>
-    <?php if (!$today): ?>
-      <p>Сегодня занятий нет.</p>
-    <?php else: ?>
-      <ul>
-      <?php foreach ($today as $t): ?>
-        <li>
-          <a href="/profile/student.php?user_id=<?= (int)$t['user_id'] ?>"><?= htmlspecialchars($t['fio']) ?></a>
-          <span class="badge"><?= htmlspecialchars(substr($t['time'],0,5)) ?></span>
-        </li>
-      <?php endforeach; ?>
-      </ul>
-      <p><a class="btn" href="/profile/attendance_today.php">Отметить присутствие за сегодня</a></p>
-    <?php endif; ?>
-  </div>
+    <div class="navbar">
+        <a href="index.php" class="btn">Главная</a>
+        <a href="schedule.php" class="btn">Расписание</a>
+        <a href="add_student.php" class="btn">Добавить ученика</a>
+        <a href="add_visit.php" class="btn">Добавить посещение</a>
+        <a href="add_payment.php" class="btn">Добавить оплату</a>
+    </div>
 
-  <div class="card">
-    <h2>Должники</h2>
-    <?php if (!$deb): ?>
-      <p>Должников нет 🎉</p>
-    <?php else: ?>
-      <table>
-        <tr><th>Ученик</th><th>Долг (уроков)</th></tr>
-        <?php foreach ($deb as $r): ?>
-          <tr>
-            <td><a href="/profile/student.php?user_id=<?= (int)$r['user_id'] ?>"><?= htmlspecialchars($r['fio']) ?></a></td>
-            <td style="color:#b00020;font-weight:700;"><?= abs((int)$r['balance_lessons']) ?></td>
-          </tr>
-        <?php endforeach; ?>
-      </table>
-    <?php endif; ?>
-  </div>
-</div>
+    <div class="content">
+        <div class="card">
+            <h2>Кто приходит сегодня</h2>
+            <?php if (!$today): ?>
+                <p>Сегодня занятий нет.</p>
+            <?php else: ?>
+                <ul>
+                    <?php foreach ($today as $t): ?>
+                        <li>
+                            <a href="/profile/student.php?user_id=<?= (int)$t['user_id'] ?>"><?= htmlspecialchars($t['fio']) ?></a>
+                            <span class="badge"><?= htmlspecialchars(substr($t['time'],0,5)) ?></span>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+                <p><a class="btn" href="/profile/attendance_today.php">Отметить присутствие за сегодня</a></p>
+            <?php endif; ?>
+        </div>
+
+        <div class="card">
+            <h2>Должники</h2>
+            <?php if (!$deb): ?>
+                <p>Должников нет 🎉</p>
+            <?php else: ?>
+                <table>
+                    <tr><th>Ученик</th><th>Долг (уроков)</th></tr>
+                    <?php foreach ($deb as $r): ?>
+                        <tr>
+                            <td><a href="/profile/student.php?user_id=<?= (int)$r['user_id'] ?>"><?= htmlspecialchars($r['fio']) ?></a></td>
+                            <td style="color:#b00020;font-weight:700;"><?= abs((int)$r['balance_lessons']) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </table>
+            <?php endif; ?>
+        </div>
+    </div>
 </body>
 </html>
