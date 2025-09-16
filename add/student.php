@@ -1,3 +1,11 @@
+<?php
+require_once __DIR__ . '/../db_conn.php';
+require_once __DIR__ . '/../common/csrf.php';
+session_start();
+if (empty($_SESSION['login']) && empty($_SESSION['id'])) {
+  echo "<meta http-equiv='refresh' content='0;URL=/index.php' />"; exit;
+}
+?>
 <!DOCTYPE html>
 <html lang="ru">
 <head>
