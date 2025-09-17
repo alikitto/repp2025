@@ -144,7 +144,7 @@ $active = 'attendance';
     }
   </style>
 </head>
-<body>
+<body class="attendance-page">
 
 <?php require __DIR__ . '/../common/nav.php'; ?>
 
