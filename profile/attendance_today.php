@@ -177,18 +177,26 @@ $active = 'attendance';
               <th>Посетил</th>
             </tr>
           </thead>
-          <tbody>
-            <?php foreach ($today as $t): $uid = (int)$t['user_id']; ?>
-              <tr>
-                <td data-label="Время" class="time-cell"><?= htmlspecialchars(substr($t['time'],0,5)) ?></td>
-                <td data-label="Ученик"><a class="link-strong" href="/profile/student.php?user_id=<?= $uid ?>"><?= htmlspecialchars($t['fio']) ?></a></td>
-                <td data-label="Посетил" style="text-align:center;">
-                  <!-- по умолчанию НЕ отмечаем -->
-                  <input class="visit-checkbox" type="checkbox" name="visited[<?= $uid ?>]" value="1">
-                </td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
+<tbody>
+  <?php foreach ($today as $t): $uid = (int)$t['user_id']; ?>
+    <tr>
+      <td data-label="Время" class="time-cell"><?= htmlspecialchars(substr($t['time'],0,5)) ?></td>
+
+      <td data-label="Ученик">
+        <a class="link-strong" href="/profile/student.php?user_id=<?= $uid ?>"><?= htmlspecialchars($t['fio']) ?></a>
+      </td>
+
+      <td data-label="Посетил" class="col-visited">
+        <label class="visit-label" title="Отметить посетил">
+          <input class="visit-checkbox" type="checkbox" name="visited[<?= $uid ?>]" value="1" aria-label="Посетил <?= htmlspecialchars($t['fio']) ?>">
+          <span class="visit-custom"></span>
+        </label>
+      </td>
+    </tr>
+  <?php endforeach; ?>
+</tbody>
+
+
         </table>
 
         <div style="margin-top:12px; display:flex; gap:10px; align-items:center;">
