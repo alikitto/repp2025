@@ -28,7 +28,7 @@ $weekdays_map = [
 ];
 
 // Указываем активный пункт меню для навбара
-$active = 'schedule'; 
+$active = 'schedule';
 
 function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 ?>
@@ -48,16 +48,16 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
             padding-bottom: 4px;
             border-bottom: 1px solid #dee2e6;
         }
-        /* Новые стили для визуальной группировки */
-        .schedule-table tbody tr.group-odd td {
-            background-color: #f8f9fa; /* Легкий фон для нечетных групп */
+        /* Стили для визуальной группировки */
+        .schedule-table tbody tr.group-style-1 td {
+            background-color: #f8f9fa; /* Фон для первой группы */
         }
-        .schedule-table tbody tr.group-even td {
-            background-color: #fff; /* Белый фон для четных групп */
+        .schedule-table tbody tr.group-style-2 td {
+            background-color: #fff; /* Фон для второй группы */
         }
-        /* Добавляем рамку сверху, когда начинается новая группа времени */
-        .schedule-table tbody tr:not(:first-child) td.new-group-start {
-            border-top: 2px solid #dee2e6;
+        /* Стиль для жирной нижней рамки у последней строки в группе */
+        .schedule-table tbody tr.group-last-row td {
+            border-bottom: 2px solid #adb5bd;
         }
         .time-cell {
             font-weight: 500;
@@ -68,7 +68,7 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 
 <?php require __DIR__ . '/../common/nav.php'; ?>
 
-<div class.content">
+<div class="content">
     <div class="card">
         <h1>Расписание на неделю</h1>
         
@@ -76,7 +76,10 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
             <div class="day-block">
                 <h2><?= $wd_name ?></h2>
 
-                <?php $students_for_this_day = $schedule_by_day[$wd_num] ?? []; ?>
+                <?php
+                $students_for_this_day = $schedule_by_day[$wd_num] ?? [];
+                $student_count = count($students_for_this_day);
+                ?>
 
                 <?php if (empty($students_for_this_day)): ?>
                     <p class="muted">В этот день занятий нет.</p>
@@ -90,41 +93,49 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
                         </thead>
                         <tbody>
                             <?php
-                            $last_time = null;      // Переменная для хранения времени предыдущей записи
-                            $group_color_idx = 0;   // Счетчик для чередования цветов фона
-                            ?>
-                            <?php foreach ($students_for_this_day as $student): ?>
-                                <?php
+                            $last_time = null;
+                            $group_color_idx = 0;
+                            // Используем цикл for, чтобы иметь возможность "заглянуть" на следующую запись
+                            for ($i = 0; $i < $student_count; $i++):
+                                $student = $students_for_this_day[$i];
+                                $next_student = $students_for_this_day[$i + 1] ?? null;
+
                                 $current_time = substr($student['time'], 0, 5);
-                                $is_new_group = false; // Флаг, который определяет начало новой группы
 
-                                // Если время текущей записи не совпадает с предыдущей,
-                                // значит, это начало новой группы
+                                // Определяем стиль фона для группы
                                 if ($current_time !== $last_time) {
-                                    $group_color_idx++; // Меняем индекс цвета
-                                    $is_new_group = true;
-                                    $last_time = $current_time;
+                                    $group_color_idx++;
                                 }
+                                $row_class = 'group-style-' . (($group_color_idx % 2) + 1);
 
-                                // Определяем класс для цвета фона
-                                $group_class = ($group_color_idx % 2 != 0) ? 'group-odd' : 'group-even';
-                                ?>
-                                <tr class="<?= $group_class ?>">
-                                    <td class="<?= $is_new_group ? 'new-group-start' : '' ?>">
+                                // Проверяем, является ли эта запись последней в своей временной группе
+                                $is_last_in_group = false;
+                                if ($next_student === null || $current_time !== substr($next_student['time'], 0, 5)) {
+                                    $is_last_in_group = true;
+                                }
+                                
+                                if ($is_last_in_group) {
+                                    $row_class .= ' group-last-row'; // Добавляем класс для нижней рамки
+                                }
+                            ?>
+                                <tr class="<?= $row_class ?>">
+                                    <td>
                                         <a class="link-strong" href="/profile/student.php?user_id=<?= (int)$student['user_id'] ?>">
                                             <?= h($student['fio']) ?>
                                         </a>
                                     </td>
-                                    <td class="time-cell <?= $is_new_group ? 'new-group-start' : '' ?>">
+                                    <td class="time-cell">
                                         <?php
                                         // Показываем время только для первой записи в группе
-                                        if ($is_new_group) {
+                                        if ($current_time !== $last_time) {
                                             echo h($current_time);
                                         }
+                                        // Обновляем "предыдущее" время для следующей итерации
+                                        $last_time = $current_time;
                                         ?>
                                     </td>
                                 </tr>
-                            <?php endforeach; ?>
+                            <?php endfor; ?>
                         </tbody>
                     </table>
                 <?php endif; ?>
