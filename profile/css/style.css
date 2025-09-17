@@ -148,3 +148,49 @@ label{font-weight:700}
   .visit-checkbox { transform:scale(1.05); }
 }
 
+/* --- Гарантируем видимость колонки "Посетил" и стиль чекбокса --- */
+.table.today th, .table.today td { padding:12px 14px; }
+.table.today th:nth-child(3), .table.today td.col-visited { width:110px; text-align:center; }
+
+/* Скрываем дефолтный чек и рисуем аккуратный кастомный */
+.visit-label { display:inline-flex; align-items:center; justify-content:center; cursor:pointer; position:relative; width:36px; height:24px; margin:0 auto; }
+.visit-label input.visit-checkbox { position:absolute; opacity:0; width:1px; height:1px; left:-9999px; }
+.visit-custom {
+  display:inline-block;
+  width:18px; height:18px; border-radius:6px;
+  border:2px solid rgba(10,95,176,0.18);
+  background:#fff; box-shadow:inset 0 -2px 0 rgba(0,0,0,0.02);
+  transition: all .12s ease;
+}
+/* checked state */
+.visit-label input.visit-checkbox:checked + .visit-custom {
+  background: linear-gradient(180deg, #0a5fb0, #084b88);
+  border-color: rgba(10,95,176,1);
+  box-shadow: 0 2px 6px rgba(10,95,176,0.12);
+  transform: scale(1.02);
+}
+/* маленькая галочка внутри (псевдо) */
+.visit-label input.visit-checkbox:checked + .visit-custom::after {
+  content: '';
+  display:block;
+  width:6px; height:10px;
+  border: solid #fff; border-width:0 2px 2px 0;
+  transform: rotate(40deg) translateY(-1px);
+  margin: 1px 0 0 6px;
+  box-sizing:content-box;
+}
+
+/* Удобство для клика: расширяем область в ячейке */
+.table.today td.col-visited { padding:10px 6px; }
+
+/* Адаптив: в карточках тоже отображаем кастомный чек */
+@media (max-width:720px) {
+  .visit-label { width:44px; height:28px; }
+  .visit-custom { width:20px; height:20px; border-radius:8px; }
+  .table.today tbody td::before { width:40%; }
+}
+
+/* Обеспечим, что заголовки правильно разделены */
+.table.today thead th { border-bottom:1px solid rgba(0,0,0,0.06); }
+.table.today thead th:not(:last-child) { border-right:1px solid rgba(0,0,0,0.04); }
+
