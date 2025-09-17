@@ -1,66 +1,99 @@
 <?php
 // /profile/attendance_today.php
+// Полный файл: отображение списка по расписанию, массовая отметка, подтверждение и сохранение (upsert).
+
+// НЕ вызываем session_start() здесь — это делает /profile/_auth.php
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/../db_conn.php';
 require_once __DIR__ . '/../common/csrf.php';
 
+// ----------------------------- IMPORTANT -----------------------------
+// Для корректной работы upsert убедитесь, что в таблице `dates` есть уникальный индекс:
+// ALTER TABLE `dates` ADD UNIQUE KEY `uniq_user_date` (`user_id`, `dates`);
+// Выполните эту команду один раз в вашей БД (через DBeaver / phpMyAdmin / psql).
+// ---------------------------------------------------------------------
+
+// текущая дата и день недели
 $today_date = date('Y-m-d');
 $wd = (int)date('N');
 
-$months = [
-  1=>'Января',2=>'Февраля',3=>'Марта',4=>'Апреля',5=>'Мая',6=>'Июня',
-  7=>'Июля',8=>'Августа',9=>'Сентября',10=>'Октября',11=>'Ноября',12=>'Декабря'
-];
-$prettyDate = (int)date('j', strtotime($today_date)) . ' ' . ($months[(int)date('n', strtotime($today_date))] ?? '');
-
-// POST -> save (upsert)
+// Обработка POST (сохранение посещений)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // CSRF (если у вас есть csrf_check)
     if (function_exists('csrf_check')) { csrf_check(); }
+
     $date = $_POST['date'] ?? $today_date;
 
+    // получаем список тех, кто по расписанию сегодня
     $st = $con->prepare("
-      SELECT s.user_id
+      SELECT s.user_id, CONCAT(s.lastname,' ',s.name) AS fio, sc.time
       FROM schedule sc
       JOIN stud s ON s.user_id = sc.user_id
       WHERE sc.weekday=?
       ORDER BY sc.time
     ");
-    if (!$st) { error_log("prepare select users failed: ".$con->error); http_response_code(500); exit('error'); }
+    if (!$st) {
+        error_log("attendance_today: prepare SELECT failed: " . $con->error);
+        http_response_code(500);
+        echo "Ошибка при получении списка по расписанию.";
+        exit;
+    }
     $st->bind_param('i', $wd);
     $st->execute();
     $rows = $st->get_result()->fetch_all(MYSQLI_ASSOC);
     $st->close();
 
+    // Сохраняем в транзакции с upsert
     mysqli_begin_transaction($con);
     try {
         $upsert = $con->prepare(
-          "INSERT INTO `dates` (`user_id`,`dates`,`visited`) VALUES (?,?,?)
-           ON DUPLICATE KEY UPDATE `visited` = VALUES(`visited`)"
+            "INSERT INTO `dates` (`user_id`, `dates`, `visited`) VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE `visited` = VALUES(`visited`)"
         );
-        if (!$upsert) throw new RuntimeException("prepare upsert failed: ".$con->error);
+        if (!$upsert) {
+            throw new RuntimeException("Prepare upsert failed: " . $con->error);
+        }
 
         foreach ($rows as $r) {
             $uid = (int)$r['user_id'];
             $visited = isset($_POST['visited'][$uid]) ? 1 : 0;
-            $upsert->bind_param('isi', $uid, $date, $visited);
-            if (!$upsert->execute()) throw new RuntimeException("execute upsert failed: ".$upsert->error);
+
+            // i = user_id, s = dates (YYYY-MM-DD), i = visited
+            if (!$upsert->bind_param('isi', $uid, $date, $visited)) {
+                throw new RuntimeException("Bind param failed: " . $upsert->error);
+            }
+
+            if (!$upsert->execute()) {
+                throw new RuntimeException("Execute upsert failed for user {$uid}: " . $upsert->error);
+            }
         }
+
         $upsert->close();
         mysqli_commit($con);
 
-        $_SESSION['flash_attendance'] = ['date'=>$date,'count'=>count($rows)];
+        // flash и редирект (чтобы избежать повторной отправки)
+        $_SESSION['flash_attendance'] = ['date' => $date, 'count' => count($rows)];
         header("Location: /profile/attendance_today.php");
         exit;
     } catch (Throwable $e) {
         mysqli_rollback($con);
-        error_log("attendance save error: ".$e->getMessage());
+
+        // логируем точную ошибку для администратора
+        error_log("attendance_today: save error: " . $e->getMessage());
+
+        // показываем дружелюбное сообщение пользователю (не раскрываем детали)
         http_response_code(500);
-        echo "<p>Ошибка при сохранении посещений. Подробности в логах.</p>";
+        echo "<!doctype html><html><head><meta charset='utf-8'><title>Ошибка</title>";
+        echo "<link href='/profile/css/style.css' rel='stylesheet'>";
+        echo "</head><body><div class='content'><div class='card'><h2>Ошибка при сохранении посещений</h2>";
+        echo "<p>Произошла ошибка при сохранении посещений. Администратор уведомлён.</p>";
+        echo "<p><a class='btn' href='/profile/attendance_today.php'>Вернуться</a></p>";
+        echo "</div></div></body></html>";
         exit;
     }
 }
 
-// Display: load schedule for today
+// Получение списка "кто по расписанию" для отображения
 $st = $con->prepare("
   SELECT s.user_id, CONCAT(s.lastname,' ',s.name) AS fio, sc.time
   FROM schedule sc
@@ -68,20 +101,26 @@ $st = $con->prepare("
   WHERE sc.weekday=?
   ORDER BY sc.time
 ");
-if (!$st) { error_log("prepare display failed: ".$con->error); exit('error'); }
-$st->bind_param('i',$wd);
+if (!$st) {
+    error_log("attendance_today: prepare SELECT failed (display): " . $con->error);
+    echo "Ошибка при получении списка по расписанию.";
+    exit;
+}
+$st->bind_param('i', $wd);
 $st->execute();
 $today = $st->get_result()->fetch_all(MYSQLI_ASSOC);
 $st->close();
 
+// flash (и сразу удалить из сессии)
 $flash = $_SESSION['flash_attendance'] ?? null;
 unset($_SESSION['flash_attendance']);
 $showModal = is_array($flash);
 $modalText = $showModal ? "Посещений занесены за {$flash['date']} — строк: {$flash['count']}" : '';
 
+// подключаем общий навбар
 $active = 'attendance';
 ?>
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
@@ -89,63 +128,48 @@ $active = 'attendance';
   <title>Отметить посещения — Tutor CRM</title>
   <link href="/profile/css/style.css" rel="stylesheet">
 </head>
-<body class="attendance-page">
+<body>
+
 <?php require __DIR__ . '/../common/nav.php'; ?>
 
 <div class="content">
   <div class="card">
-    <h2>Отметить посещения — <?= htmlspecialchars($prettyDate) ?></h2>
+    <h2>Отметить посещения — <?= htmlspecialchars($today_date) ?></h2>
 
     <?php if (!$today): ?>
       <p>Сегодня по расписанию нет учеников.</p>
     <?php else: ?>
-      <form id="attendanceForm" method="post" action="/profile/attendance_today.php">
+      <form method="post" action="/profile/attendance_today.php" id="attendanceForm">
         <input type="hidden" name="date" value="<?= htmlspecialchars($today_date) ?>">
         <?php if (function_exists('csrf_token')): ?>
           <input type="hidden" name="csrf" value="<?= htmlspecialchars(csrf_token()) ?>">
         <?php endif; ?>
 
+        <!-- Кнопки массовой отметки -->
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
-          <button type="button" id="markAllBtn" class="btn btn-ghost">Отметить всех</button>
-          <button type="button" id="clearAllBtn" class="btn">Снять отметки</button>
-          <div style="margin-left:auto;color:var(--muted);font-size:14px;">По умолчанию чекбоксы не выбраны</div>
+          <button type="button" id="markAllBtn" class="btn btn-ghost" title="Отметить всех">Отметить всех</button>
+          <button type="button" id="clearAllBtn" class="btn" title="Снять отметки">Снять отметки</button>
+          <div style="margin-left:auto;color:var(--muted);font-size:14px;">
+            Отметки по умолчанию включены
+          </div>
         </div>
 
-        <table class="table today" role="table" aria-label="Отметить посещения">
+        <table class="table today">
           <thead>
             <tr>
-              <th>Время</th>
+              <th style="width:18%;">Время</th>
               <th>Ученик</th>
-              <th style="width:110px;text-align:center">Посетил</th>
+              <th style="width:16%;">Посетил</th>
             </tr>
           </thead>
           <tbody>
             <?php foreach ($today as $t): $uid = (int)$t['user_id']; ?>
               <tr>
-                <td class="time-cell">
-                  <div class="cell-wrap">
-                    <div class="cell-label">Время</div>
-                    <div class="cell-content"><?= htmlspecialchars(substr($t['time'],0,5)) ?></div>
-                  </div>
-                </td>
-
-                <td>
-                  <div class="cell-wrap">
-                    <div class="cell-label">Ученик</div>
-                    <div class="cell-content"><a class="link-strong" href="/profile/student.php?user_id=<?= $uid ?>"><?= htmlspecialchars($t['fio']) ?></a></div>
-                  </div>
-                </td>
-
-                <td class="col-visited">
-                  <div class="cell-wrap">
-                    <div class="cell-label">Посетил</div>
-                    <div class="cell-content" style="text-align:center;">
-                      <label class="visit-label" title="Отметить посетил">
-                        <input class="visit-checkbox" type="checkbox" name="visited[<?= $uid ?>]" value="1" aria-label="Посетил <?= htmlspecialchars($t['fio']) ?>">
-                        <span class="visit-custom"></span>
-                      </label>
-                    </div>
-                  </div>
+                <td class="time-cell"><?= htmlspecialchars(substr($t['time'],0,5)) ?></td>
+                <td><a class="link-strong" href="/profile/student.php?user_id=<?= $uid ?>"><?= htmlspecialchars($t['fio']) ?></a></td>
+                <td style="text-align:center;">
+                  <!-- по умолчанию отмечаем checked -->
+                  <input class="visit-checkbox" type="checkbox" name="visited[<?= $uid ?>]" value="1" checked>
                 </td>
               </tr>
             <?php endforeach; ?>
@@ -153,6 +177,7 @@ $active = 'attendance';
         </table>
 
         <div style="margin-top:12px; display:flex; gap:10px; align-items:center;">
+          <!-- кнопка открывает confirm modal -->
           <button type="button" id="saveBtn" class="btn">Сохранить посещения</button>
           <a class="btn btn-ghost" href="/profile/index.php">Отмена</a>
         </div>
@@ -165,13 +190,14 @@ $active = 'attendance';
 <div id="confirmModal" class="modal" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
     <h3 id="confirmTitle">Подтвердите сохранение</h3>
-    <p>Вы уверены, что хотите сохранить отметки посещения за <strong><?= htmlspecialchars($prettyDate) ?></strong>?</p>
-    <div id="confirmStats" style="margin-top:6px;color:var(--muted)"></div>
+    <p>Вы уверены, что хотите сохранить отметки посещения за <strong><?= htmlspecialchars($today_date) ?></strong>?</p>
     <div class="modal-actions" style="margin-top:12px">
       <button id="confirmSubmit" class="btn">Подтвердить</button>
       <button id="confirmCancel" class="btn btn-ghost">Отмена</button>
     </div>
-    <button class="modal-close" id="confirmClose" aria-label="Закрыть">✕</button>
+    <button class="modal-close" id="confirmClose" aria-label="Закрыть">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
   </div>
 </div>
 
@@ -184,15 +210,24 @@ $active = 'attendance';
     <h3>Посещений занесены</h3>
     <p><?= htmlspecialchars($modalText) ?></p>
     <div class="modal-actions">
-      <a class="btn" href="/profile/index.php">На главную</a>
-      <a class="btn btn-ghost" href="/profile/attendance_today.php">Отметить ещё</a>
+      <a class="btn" href="/profile/index.php">
+        <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12l9-9 9 9"/><path d="M9 21V9h6v12"/></svg>
+        На главную
+      </a>
+      <a class="btn btn-ghost" href="/profile/attendance_today.php">
+        <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Отметить ещё
+      </a>
     </div>
-    <button class="modal-close" id="modalClose" aria-label="Закрыть">✕</button>
+    <button class="modal-close" id="modalClose" aria-label="Закрыть">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
   </div>
 </div>
 
 <script>
 (function(){
+  // массовые кнопки
   const markAllBtn = document.getElementById('markAllBtn');
   const clearAllBtn = document.getElementById('clearAllBtn');
   const checkboxes = () => Array.from(document.querySelectorAll('.visit-checkbox'));
@@ -200,32 +235,32 @@ $active = 'attendance';
   markAllBtn?.addEventListener('click', () => { checkboxes().forEach(cb => cb.checked = true); });
   clearAllBtn?.addEventListener('click', () => { checkboxes().forEach(cb => cb.checked = false); });
 
-  // confirm modal
+  // confirm modal logic
   const saveBtn = document.getElementById('saveBtn');
   const confirmModal = document.getElementById('confirmModal');
   const confirmSubmit = document.getElementById('confirmSubmit');
   const confirmCancel = document.getElementById('confirmCancel');
   const confirmClose = document.getElementById('confirmClose');
   const form = document.getElementById('attendanceForm');
-  const confirmStats = document.getElementById('confirmStats');
 
-  function updateStats() {
-    const all = checkboxes().length;
-    const checked = checkboxes().filter(c=>c.checked).length;
-    const not = all - checked;
-    confirmStats.textContent = `Отмечено: ${checked} · Не отмечено: ${not}`;
-  }
+  function openConfirm(){ if(!confirmModal) return; confirmModal.removeAttribute('hidden'); document.body.classList.add('noscroll'); confirmSubmit?.focus(); }
+  function closeConfirm(){ if(!confirmModal) return; confirmModal.setAttribute('hidden',''); document.body.classList.remove('noscroll'); saveBtn?.focus(); }
 
-  function openConfirm(){ updateStats(); confirmModal.removeAttribute('hidden'); document.body.classList.add('noscroll'); confirmSubmit?.focus(); }
-  function closeConfirm(){ confirmModal.setAttribute('hidden',''); document.body.classList.remove('noscroll'); saveBtn?.focus(); }
-
-  saveBtn?.addEventListener('click', (e)=>{ e.preventDefault(); updateStats(); openConfirm(); });
+  saveBtn?.addEventListener('click', (e)=>{ e.preventDefault(); openConfirm(); });
   confirmCancel?.addEventListener('click', (e)=>{ e.preventDefault(); closeConfirm(); });
   confirmClose?.addEventListener('click', (e)=>{ e.preventDefault(); closeConfirm(); });
+
   confirmSubmit?.addEventListener('click', (e)=>{ e.preventDefault(); confirmSubmit.disabled = true; form.submit(); });
 
-  // live update stats if user toggles checkboxes inside modal
-  checkboxes().forEach(cb => cb.addEventListener('change', updateStats));
+  // keyboard/overlay handlers
+  window.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){
+      if(confirmModal && !confirmModal.hasAttribute('hidden')) closeConfirm();
+      const successModal = document.getElementById('successModal');
+      if(successModal && !successModal.hasAttribute('hidden')) { successModal.setAttribute('hidden',''); document.body.classList.remove('noscroll'); }
+    }
+  });
+  confirmModal?.addEventListener('click', e => { if (e.target === confirmModal) closeConfirm(); });
 
   // success modal handlers
   const successModal = document.getElementById('successModal');
