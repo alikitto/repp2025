@@ -14,7 +14,7 @@ $day3 = $_POST['day3'] ?? ''; $time3 = $_POST['time3'] ?? '';
 
 if ($name === '') { die('Укажите имя'); }
 
-// т.к. в схеме есть lastname, пишем пустую строку (чтобы не рушить NOT NULL)
+// в схеме есть lastname — пишем пустую строку
 $lastname = '';
 
 function wd_to_num($s){
@@ -48,8 +48,10 @@ try {
 
   mysqli_commit($con);
 
-  // редирект обратно на форму с модальным «успех»
-  header("Location: /add/student.php?created=1&user_id={$uid}&name=".urlencode($name));
+  // ---- FLASH в сессии вместо query-параметров ----
+  $_SESSION['flash_created'] = ['id' => $uid, 'name' => $name];
+
+  header("Location: /add/student.php");
   exit;
 } catch (Throwable $e) {
   mysqli_rollback($con);
