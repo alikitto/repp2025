@@ -139,3 +139,12 @@ label{font-weight:700}
 /* безопасное скрытие элементов с hidden */
 [hidden]{display:none!important}
 
+/* --- улучшения для attendance_today table --- */
+.table.today th { background:#eef1f4; border-bottom:1px solid var(--border); padding:12px 14px; text-align:left; font-weight:700; }
+.table.today th:not(:last-child){ border-right:1px solid rgba(0,0,0,0.06); }
+.table.today td { padding:12px 14px; border-bottom:1px solid rgba(0,0,0,0.04); }
+@media (max-width:720px) {
+  .table.today tbody td { padding:12px 16px; }
+  .visit-checkbox { transform:scale(1.05); }
+}
+
