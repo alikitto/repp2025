@@ -1,13 +1,17 @@
 <?php
-// /profile/students.php
+// /profile/list.php
+// Список учеников с панелью действий: просмотр, добавить посещение (modal), добавить оплату (modal), редактировать.
+// Требует: /profile/_auth.php, /../db_conn.php, /../common/csrf.php, /../common/nav.php
+
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/../db_conn.php';
+require_once __DIR__ . '/../common/csrf.php';
 
-// параметры фильтра/поиска
+// фильтры
 $klass = trim($_GET['klass'] ?? '');
 $q     = trim($_GET['q'] ?? '');
 
-// --- получить список доступных классов для фильтра ---
+// получить список классов
 $res = $con->query("SELECT DISTINCT COALESCE(NULLIF(klass,''),'') AS klass FROM stud ORDER BY klass");
 $classes = [];
 if ($res) {
@@ -17,9 +21,7 @@ if ($res) {
   $res->close();
 }
 
-// --- основной запрос: имя, класс, баланс уроков
-// balance_lessons = (COUNT(p.id) * 8) - SUM(visited)
-// note: используем LEFT JOIN, GROUP BY
+// основной запрос: считаем баланс аналогично ранее (COUNT(p.id)*8 - SUM(visited))
 $sql = "
 SELECT s.user_id,
        CONCAT(s.lastname,' ',s.name) AS fio,
@@ -42,7 +44,7 @@ if ($klass !== '') {
   $params[] = $klass;
   $types .= 's';
 }
-// поиск по имени
+// поиск по имени/телефону
 if ($q !== '') {
   $where[] = "(s.name LIKE ? OR s.lastname LIKE ? OR CONCAT(s.lastname,' ',s.name) LIKE ? OR s.phone LIKE ?)";
   $like = "%$q%";
@@ -54,13 +56,12 @@ if ($where) $sql .= " WHERE " . implode(' AND ', $where);
 
 $sql .= " GROUP BY s.user_id, fio, klass, s.phone ORDER BY klass ASC, fio ASC";
 
-// подготовка и выполнение
 $stmt = $con->prepare($sql);
-if (!$stmt) {
-  die("DB error: " . $con->error);
-}
+if (!$stmt) { die("DB error: " . $con->error); }
+
 if ($params) {
   // bind params dynamically
+  $bind_names = [];
   $bind_names[] = $types;
   for ($i=0;$i<count($params);$i++){
     $bind_name = 'bind' . $i;
@@ -69,12 +70,15 @@ if ($params) {
   }
   call_user_func_array([$stmt, 'bind_param'], $bind_names);
 }
+
 $stmt->execute();
 $result = $stmt->get_result();
 $students = $result->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
-?>
 
+// CSRF token for AJAX posts (if implemented)
+$csrfToken = function_exists('csrf_token') ? csrf_token() : '';
+?>
 <!doctype html>
 <html lang="ru">
 <head>
@@ -83,17 +87,22 @@ $stmt->close();
   <title>Список учеников — Tutor CRM</title>
   <link href="/profile/css/style.css" rel="stylesheet">
   <style>
-    /* дополнительные локальные стили для страницы */
+    /* локальные стили */
     .filter-row { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
     .filter-row .search { flex:1; min-width:160px; }
-    .dot { width:12px; height:12px; border-radius:50%; display:inline-block; margin-right:8px; vertical-align:middle; box-shadow:0 2px 6px rgba(0,0,0,.06); }
-    .dot.green{ background:#12a150; }
-    .dot.red{ background:#b00020; }
-    .dot.gray{ background:#9aa0a6; }
-    .students-actions { display:flex; gap:8px; align-items:center; margin-left:auto; }
-    @media (max-width:720px){ .filter-row { flex-direction:column; align-items:stretch; } .students-actions{ margin-left:0; } }
-    .small-muted{ color:var(--muted); font-size:13px; }
-    .csv-link{ font-size:13px; color:var(--brand); text-decoration:underline; }
+    .actions-panel { display:flex; gap:8px; align-items:center; justify-content:flex-end; }
+    .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:8px; border:1px solid var(--border); background:#fff; cursor:pointer; }
+    .icon-btn:hover { box-shadow:0 6px 18px rgba(0,0,0,.06); }
+    .icon-btn svg{ width:18px; height:18px; stroke:currentColor; }
+    .td-actions { display:flex; gap:8px; justify-content:flex-end; }
+    .muted { color:var(--muted); font-size:13px; }
+    /* модалки быстрые */
+    .small-row { display:flex; gap:8px; align-items:center; margin:8px 0; }
+    .form-inline{display:flex;gap:8px;align-items:center}
+    @media (max-width:720px){
+      .filter-row{flex-direction:column;align-items:stretch}
+      .td-actions{justify-content:flex-start}
+    }
   </style>
 </head>
 <body>
@@ -110,19 +119,19 @@ $stmt->close();
 
     <div class="filter-row" style="margin-top:12px;">
       <form id="filterForm" method="get" style="display:flex;align-items:center;gap:8px;width:100%;">
+        <!-- По умолчанию показываем надпись "Класс (по умолчанию)" -->
         <select name="klass" onchange="this.form.submit()" style="padding:10px;border-radius:8px;border:1px solid var(--border);">
-          <option value="">— Все классы —</option>
+          <option value=""><?= htmlspecialchars('Класс (по умолчанию)') ?></option>
           <?php foreach ($classes as $c): ?>
-            <option value="<?= htmlspecialchars($c) ?>" <?= $c=== $klass ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
+            <option value="<?= htmlspecialchars($c) ?>" <?= $c === $klass ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
           <?php endforeach; ?>
         </select>
 
         <input class="search input" type="search" name="q" placeholder="Поиск по имени или телефону" value="<?= htmlspecialchars($q) ?>">
 
-        <div class="students-actions">
+        <div class="actions-panel">
           <button type="submit" class="btn btn-ghost">Применить</button>
-          <a class="btn" href="/profile/students.php">Сброс</a>
-          <a class="csv-link" href="/profile/students_export.php?<?= http_build_query(['klass'=>$klass,'q'=>$q]) ?>">Экспорт CSV</a>
+          <a class="btn" href="/profile/list.php">Сброс</a>
         </div>
       </form>
     </div>
@@ -132,28 +141,42 @@ $stmt->close();
         <tr>
           <th>Имя</th>
           <th style="width:120px;">Класс</th>
-          <th style="width:220px;">Задолженность</th>
+          <th style="width:200px;text-align:right;">Действия</th>
         </tr>
       </thead>
       <tbody>
         <?php if (!$students): ?>
           <tr><td colspan="3">Учеников не найдено.</td></tr>
-        <?php else: foreach ($students as $s): 
-            $balance = (int)$s['balance_lessons']; 
-            if ($balance < 0) { $state = 'debt'; $num = abs($balance); $dot='red'; $label = "{$num} урок(ов) должник"; }
-            elseif ($balance > 0) { $state = 'prepaid'; $num = $balance; $dot='green'; $label = "Предоплата: {$num} ур."; }
-            else { $state = 'ok'; $num = 0; $dot='gray'; $label = "Баланс: 0"; }
+        <?php else: foreach ($students as $s):
+          $balance = (int)$s['balance_lessons'];
         ?>
           <tr>
             <td>
               <a href="/profile/student.php?user_id=<?= (int)$s['user_id'] ?>"><?= htmlspecialchars($s['fio']) ?></a>
-              <div class="small-muted"><?= htmlspecialchars($s['phone'] ?? '') ?></div>
+              <div class="muted"><?= htmlspecialchars($s['phone'] ?? '') ?></div>
             </td>
             <td><?= htmlspecialchars($s['klass']) ?></td>
-            <td>
-              <span class="dot <?= $dot ?>" aria-hidden="true"></span>
-              <strong style="vertical-align:middle"><?= ($state==='debt' ? "<span style='color:var(--danger)'>" . ($num) . " ур.</span>" : "<span style='color:#0a5fb0'>{$num} ур.</span>") ?></strong>
-              <div class="small-muted" style="margin-top:4px;"><?= htmlspecialchars($label) ?></div>
+            <td class="td-actions">
+              <!-- Посмотреть карточку -->
+              <a class="icon-btn" title="Просмотреть карточку" href="/profile/student.php?user_id=<?= (int)$s['user_id'] ?>">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#0a5fb0"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+              </a>
+
+              <!-- Добавить посещение (открывает modal) -->
+              <button class="icon-btn js-add-visit" data-user_id="<?= (int)$s['user_id'] ?>" data-name="<?= htmlspecialchars($s['fio'], ENT_QUOTES) ?>" title="Добавить посещение">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#0a5fb0"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              </button>
+
+              <!-- Добавить оплату (открывает modal) -->
+              <button class="icon-btn js-add-pay" data-user_id="<?= (int)$s['user_id'] ?>" data-name="<?= htmlspecialchars($s['fio'], ENT_QUOTES) ?>" title="Добавить оплату">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#0a5fb0"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3v4M8 3v4"/></svg>
+              </button>
+
+              <!-- Редактировать -->
+              <a class="icon-btn" title="Редактировать" href="/add/update.php?user_id=<?= (int)$s['user_id'] ?>">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#0a5fb0"><path d="M3 21l3-1 11-11 2 2-11 11-1 3z"/><path d="M14 7l3 3"/></svg>
+              </a>
+
             </td>
           </tr>
         <?php endforeach; endif; ?>
@@ -162,5 +185,209 @@ $stmt->close();
   </div>
 </div>
 
+<!-- Modal: Add Visit -->
+<div id="modalVisit" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <button class="modal-close js-close-visit" aria-label="Закрыть">✕</button>
+    <h3>Добавить посещение</h3>
+    <p id="visitStudentName" style="font-weight:700;margin-bottom:8px;"></p>
+    <form id="visitForm" class="form">
+      <input type="hidden" name="user_id" id="visit_user_id">
+      <?php if ($csrfToken): ?>
+        <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrfToken) ?>">
+      <?php endif; ?>
+      <label>Дата</label>
+      <input type="date" name="dataa" id="visit_date" class="input" required>
+
+      <div class="small-row">
+        <label><input type="checkbox" name="visited" id="visit_visited" checked> Посетил</label>
+      </div>
+
+      <div style="margin-top:12px; display:flex; gap:8px;">
+        <button type="button" id="visitSubmit" class="btn">Сохранить посещение</button>
+        <button type="button" class="btn btn-ghost js-close-visit">Отмена</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Add Payment -->
+<div id="modalPay" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <button class="modal-close js-close-pay" aria-label="Закрыть">✕</button>
+    <h3>Добавить оплату</h3>
+    <p id="payStudentName" style="font-weight:700;margin-bottom:8px;"></p>
+    <form id="payForm" class="form">
+      <input type="hidden" name="user_id" id="pay_user_id">
+      <?php if ($csrfToken): ?>
+        <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrfToken) ?>">
+      <?php endif; ?>
+      <label>Дата оплаты</label>
+      <input type="date" name="date" id="pay_date" class="input" required>
+
+      <label style="margin-top:8px;">Кол-во уроков (по умолчанию 8)</label>
+      <input type="number" name="lessons" id="pay_lessons" class="input" value="8" min="1" required>
+
+      <label style="margin-top:8px;">Сумма (опционально)</label>
+      <input type="text" name="amount" id="pay_amount" class="input" placeholder="AZN">
+
+      <div style="margin-top:12px; display:flex; gap:8px;">
+        <button type="button" id="paySubmit" class="btn">Сохранить оплату</button>
+        <button type="button" class="btn btn-ghost js-close-pay">Отмена</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Success -->
+<div id="modalSuccess" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-icon success"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2l4-4"/></svg></div>
+    <h3 id="successTitle">Успешно</h3>
+    <p id="successText"></p>
+    <div class="modal-actions">
+      <button id="successClose" class="btn">OK</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // Endpoints (если нужно — поменяй на свои)
+  const visitEndpoint = '/add/dates.php'; // ожидается GET user_id и POST dataa, visited
+  const payEndpoint   = '/add/pays.php';  // ожидается POST (user_id, lessons, amount, date) — если у тебя другие имена полей, измените ниже
+
+  // helper to open/close modal
+  function showModal(el){ el.removeAttribute('hidden'); document.body.classList.add('noscroll'); }
+  function hideModal(el){ el.setAttribute('hidden',''); document.body.classList.remove('noscroll'); }
+
+  // VISIT modal
+  const visitBtns = document.querySelectorAll('.js-add-visit');
+  const modalVisit = document.getElementById('modalVisit');
+  const visitStudentName = document.getElementById('visitStudentName');
+  const visitUserId = document.getElementById('visit_user_id');
+  const visitDate = document.getElementById('visit_date');
+  const visitVisited = document.getElementById('visit_visited');
+  const visitSubmit = document.getElementById('visitSubmit');
+
+  function todayISO(){ const d=new Date(); d.setHours(0,0,0,0); return d.toISOString().slice(0,10); }
+
+  visitBtns.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const uid = btn.getAttribute('data-user_id');
+      const name = btn.getAttribute('data-name') || 'Ученик';
+      visitStudentName.textContent = name;
+      visitUserId.value = uid;
+      visitDate.value = todayISO();
+      visitVisited.checked = true;
+      showModal(modalVisit);
+    });
+  });
+
+  document.querySelectorAll('.js-close-visit').forEach(b=>b.addEventListener('click', ()=> hideModal(modalVisit)));
+
+  visitSubmit.addEventListener('click', async (e)=>{
+    // собрать данные
+    const uid = visitUserId.value;
+    const date = visitDate.value;
+    const visited = visitVisited.checked ? '1' : '0';
+
+    // формируем POST через fetch. add/dates.php ожидает GET user_id
+    const url = visitEndpoint + '?user_id=' + encodeURIComponent(uid);
+    const form = new FormData();
+    form.append('dataa', date);
+    form.append('visited', visited);
+    <?php if ($csrfToken): ?>
+    form.append('csrf', '<?= addslashes($csrfToken) ?>');
+    <?php endif; ?>
+
+    try {
+      const resp = await fetch(url, { method:'POST', body:form, credentials:'same-origin' });
+      const text = await resp.text();
+      // Простой успех-детектор: если вернулся код 200 и не "Ошибка" => считаем успехом.
+      if (resp.ok) {
+        hideModal(modalVisit);
+        showSuccess('Посещение сохранено', 'Посещение успешно добавлено/обновлено.');
+        // Обновим страницу (или можно обновить таблицу динамически)
+        setTimeout(()=> location.reload(), 900);
+      } else {
+        throw new Error('Ошибка сохранения');
+      }
+    } catch(err){
+      alert('Ошибка при добавлении посещения: ' + err.message);
+    }
+  });
+
+  // PAY modal
+  const payBtns = document.querySelectorAll('.js-add-pay');
+  const modalPay = document.getElementById('modalPay');
+  const payStudentName = document.getElementById('payStudentName');
+  const payUserId = document.getElementById('pay_user_id');
+  const payDate = document.getElementById('pay_date');
+  const payLessons = document.getElementById('pay_lessons');
+  const payAmount = document.getElementById('pay_amount');
+  const paySubmit = document.getElementById('paySubmit');
+
+  payBtns.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const uid = btn.getAttribute('data-user_id');
+      const name = btn.getAttribute('data-name') || 'Ученик';
+      payStudentName.textContent = name;
+      payUserId.value = uid;
+      payDate.value = todayISO();
+      payLessons.value = '8';
+      payAmount.value = '';
+      showModal(modalPay);
+    });
+  });
+
+  document.querySelectorAll('.js-close-pay').forEach(b=>b.addEventListener('click', ()=> hideModal(modalPay)));
+
+  paySubmit.addEventListener('click', async ()=>{
+    const uid = payUserId.value;
+    const date = payDate.value;
+    const lessons = payLessons.value || '8';
+    const amount = payAmount.value || '';
+
+    // POST to add/pays.php (assumption: it will accept these fields)
+    const form = new FormData();
+    form.append('user_id', uid);
+    form.append('lessons', lessons);
+    form.append('amount', amount);
+    form.append('date', date);
+    <?php if ($csrfToken): ?>
+    form.append('csrf', '<?= addslashes($csrfToken) ?>');
+    <?php endif; ?>
+
+    try {
+      const resp = await fetch(payEndpoint, { method:'POST', body:form, credentials:'same-origin' });
+      if (resp.ok) {
+        hideModal(modalPay);
+        showSuccess('Оплата сохранена', 'Оплата успешно добавлена.');
+        setTimeout(()=> location.reload(), 900);
+      } else {
+        const txt = await resp.text();
+        throw new Error(txt || 'Ошибка при сохранении оплаты');
+      }
+    } catch(err){
+      alert('Ошибка при добавлении оплаты: ' + err.message);
+    }
+  });
+
+  // Success modal
+  const modalSuccess = document.getElementById('modalSuccess');
+  const successTitle = document.getElementById('successTitle');
+  const successText = document.getElementById('successText');
+  const successClose = document.getElementById('successClose');
+
+  function showSuccess(title, text){
+    successTitle.textContent = title;
+    successText.textContent = text;
+    showModal(modalSuccess);
+  }
+  successClose.addEventListener('click', ()=> hideModal(modalSuccess));
+
+})();
+</script>
 </body>
 </html>
