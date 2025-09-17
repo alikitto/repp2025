@@ -197,7 +197,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     .icon-btn:hover { background:#fff5f5; border-color:#ffc9c9; }
     .icon-btn svg { width:18px; height:18px; }
 
-    .load-more-container { text-align:center; padding:16px 0 10px; }
+    .load-more-container { display:flex; justify-content:center; padding:16px 0 10px; }
     
     .schedule-table { font-size:14px; margin-top:12px; border-collapse:collapse; width:100%; max-width:300px; }
     .schedule-table td { padding:6px 10px; border: 1px solid #e9edf3; }
@@ -208,8 +208,13 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     .modal[hidden]{display:none} .modal-card{background:#fff;padding:18px;border-radius:12px;width:420px;max-width:95vw;box-shadow:0 10px 30px rgba(0,0,0,0.2);position:relative}
     .modal-close{position:absolute;right:10px;top:8px;border:none;background:transparent;font-size:18px;cursor:pointer}
     .form .input,.form input[type=date],.form input[type=number],.form input[type=text]{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;margin-top:4px;}
-    .actions{display:flex;gap:8px;margin-top:12px} .modal-card.success{background:#0f9d58;color:#fff;text-align:center}
-    .success-icon{width:56px;height:56px;border-radius:50%;background:#fff;color:#0f9d58;display:inline-flex;align-items:center;justify-content:center;margin-bottom:8px;font-weight:700}
+    .actions{display:flex;gap:8px;margin-top:12px}
+    
+    .modal-card.success{background:#0f9d58;color:#fff;text-align:center}
+    .modal-card.notify{background:#6c757d;color:#fff;text-align:center}
+    .toast-icon{width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,0.9);display:inline-flex;align-items:center;justify-content:center;margin-bottom:8px;font-weight:700;font-size:28px;}
+    .modal-card.success .toast-icon {color:#0f9d58;}
+    .modal-card.notify .toast-icon {color:#6c757d;}
 
     @media (max-width:680px){
       .page-head h2{font-size:20px} .table th,.table td{padding:8px 10px;font-size:14px}
@@ -285,7 +290,8 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 <div id="modalVisit" class="modal" hidden><div class="modal-card"><button class="modal-close" aria-label="Закрыть">✕</button><h3>Добавить посещение</h3><div class="muted" style="margin-bottom:8px;"><?= h($student['lastname'].' '.$student['name']) ?></div><form class="form" onsubmit="return false;"><label>Дата</label><input type="date" id="visit_date" class="input" required><div style="margin-top:8px;"><label><input type="checkbox" id="visit_visited" checked> Пришёл</label></div><div class="actions"><button type="button" id="visitSubmit" class="btn primary sm">Сохранить</button><button type="button" class="btn gray sm modal-close">Отмена</button></div></form></div></div>
 <div id="modalPay" class="modal" hidden><div class="modal-card"><button class="modal-close" aria-label="Закрыть">✕</button><h3>Добавить оплату</h3><div class="muted" style="margin-bottom:8px;"><?= h($student['lastname'].' '.$student['name']) ?></div><form class="form" onsubmit="return false;"><label>Дата оплаты</label><input type="date" id="pay_date" class="input" required><label style="margin-top:8px;">Кол-во уроков</label><input type="number" id="pay_lessons" class="input" value="8" min="1" required><label style="margin-top:8px;">Сумма (AZN)</label><input type="text" id="pay_amount" class="input" readonly><div class="muted">Сумма рассчитывается на сервере.</div><div class="actions"><button type="button" id="paySubmit" class="btn pay sm">Сохранить</button><button type="button" class="btn gray sm modal-close">Отмена</button></div></form></div></div>
 <div id="modalConfirm" class="modal" hidden><div class="modal-card"><button class="modal-close" aria-label="Закрыть">✕</button><h3 id="confirmTitle">Подтверждение</h3><p id="confirmText" class="muted"></p><div class="actions"><button type="button" id="confirmYes" class="btn danger sm">Удалить</button><button type="button" class="btn gray sm modal-close">Отмена</button></div></div></div>
-<div id="modalSuccess" class="modal" hidden><div class="modal-card success"><button class="modal-close" aria-label="Закрыть" style="color:#fff;">✕</button><div class="success-icon">✔</div><h3 id="successTitle" style="margin:6px 0;">Успешно</h3><p id="successText" style="opacity:.9;margin:0 0 6px 0;"></p></div></div>
+<div id="modalSuccess" class="modal" hidden><div class="modal-card success" role="alert"><button class="modal-close" aria-label="Закрыть" style="color:#fff;">✕</button><div class="toast-icon">✔</div><h3 class="toast-title" style="margin:6px 0;"></h3><p class="toast-text" style="opacity:.9;margin:0 0 6px 0;"></p></div></div>
+<div id="modalNotify" class="modal" hidden><div class="modal-card notify" role="alert"><button class="modal-close" aria-label="Закрыть" style="color:#fff;">✕</button><div class="toast-icon">🗑️</div><h3 class="toast-title" style="margin:6px 0;"></h3><p class="toast-text" style="opacity:.9;margin:0 0 6px 0;"></p></div></div>
 <div id="modalDeleteStudent" class="modal" hidden><div class="modal-card"><button class="modal-close" aria-label="Закрыть">✕</button><h3>Удалить ученика?</h3><p class="muted">Это действие необратимо. Будут удалены все данные об ученике.</p><p class="muted" style="margin-top:10px;">Для подтверждения, введите <b>22</b> в поле ниже:</p><form class="form" onsubmit="return false;"><input type="text" id="delete_confirm_answer" class="input" autocomplete="off"><div class="actions"><button type="button" id="deleteStudentConfirmBtn" class="btn danger sm">Удалить навсегда</button><button type="button" class="btn gray sm modal-close">Отмена</button></div></form></div></div>
 
 <script>
@@ -300,6 +306,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     pay: document.getElementById('modalPay'),
     confirm: document.getElementById('modalConfirm'),
     success: document.getElementById('modalSuccess'),
+    notify: document.getElementById('modalNotify'),
     deleteStudent: document.getElementById('modalDeleteStudent'),
   };
 
@@ -307,21 +314,27 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
   function hideModal(m){ if(m) m.setAttribute('hidden',''); }
   function todayISO(){ return new Date().toISOString().slice(0,10); }
   
-  function showSuccess(title, text = '', duration = 1200) {
-    modals.success.querySelector('#successTitle').textContent = title;
-    modals.success.querySelector('#successText').textContent = text;
-    showModal(modals.success);
-    setTimeout(() => location.reload(), duration);
+  function showToast(type, title, text = '', duration = 1200, redirectUrl = null) {
+    const modal = (type === 'success') ? modals.success : modals.notify;
+    if (!modal) return;
+    modal.querySelector('.toast-title').textContent = title;
+    modal.querySelector('.toast-text').textContent = text;
+    Object.values(modals).forEach(m => { if (m !== modal) hideModal(m); });
+    showModal(modal);
+    const timer = setTimeout(() => {
+      if (redirectUrl) location.href = redirectUrl;
+      else hideModal(modal);
+    }, duration);
+    modal.querySelector('.modal-close').onclick = () => {
+      clearTimeout(timer);
+      hideModal(modal);
+    };
   }
 
   // General Modal Controls
   document.addEventListener('click', e => {
-    if (e.target.closest('.modal-close')) {
-      e.target.closest('.modal').setAttribute('hidden','');
-    }
-    if (e.target.matches('.modal')) {
-      e.target.setAttribute('hidden', '');
-    }
+    if (e.target.closest('.modal-close')) e.target.closest('.modal')?.setAttribute('hidden','');
+    if (e.target.matches('.modal')) e.target.setAttribute('hidden', '');
   });
   window.addEventListener('keydown', (e) => { if(e.key==='Escape') Object.values(modals).forEach(hideModal); });
 
@@ -358,7 +371,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
       const resp = await fetch(`/add/dates.php?user_id=${uid}`, { method:'POST', body:form });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       hideModal(modals.visit);
-      showSuccess('Посещение добавлено');
+      showToast('success', 'Посещение добавлено', '', 1200, location.href);
     } catch(e) { alert('Ошибка: ' + e.message); }
   });
 
@@ -374,7 +387,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
       const j = await resp.json();
       if (!resp.ok || !j.ok) throw new Error(j.error || `HTTP ${resp.status}`);
       hideModal(modals.pay);
-      showSuccess('Оплата добавлена', `Уроков: ${form.get('lessons')}`);
+      showToast('success', 'Оплата добавлена', `Уроков: ${form.get('lessons')}`, 1200, location.href);
     } catch(e) { alert('Ошибка: ' + e.message); }
   });
 
@@ -388,8 +401,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     form.append('csrf_check_answer', '22');
     try {
       await fetch(location.pathname, { method: 'POST', body: form });
-      alert('Ученик удален.');
-      location.href = '/profile/';
+      showToast('notify', 'Ученик удалён', 'Переадресация на главную...', 1500, '/profile/');
     } catch (e) { alert('Ошибка: ' + e.message); }
   });
 
@@ -421,6 +433,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
       if (!j.ok) throw new Error('Server error');
       pendingDelete.element.remove();
       hideModal(modals.confirm);
+      showToast('notify', 'Запись удалена');
     } catch(e) { alert('Ошибка удаления: ' + e.message); }
   });
 
@@ -430,14 +443,12 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
       if (!btn) return;
       const offset = parseInt(btn.dataset.offset, 10);
       btn.disabled = true; btn.textContent = 'Загрузка...';
-      
       const form = new FormData();
       form.append('action', `load_more_${type}`);
       form.append('v', visitFilter);
       form.append('offset', offset);
       form.append('user_id', uid);
       form.append('csrf', csrf);
-
       try {
           const resp = await fetch(location.pathname, { method: 'POST', body: form });
           const j = await resp.json();
