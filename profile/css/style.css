@@ -131,3 +131,11 @@ label{font-weight:700}
 
 /* гарантируем скрытие элементов с атрибутом hidden */
 [hidden] { display: none !important; }
+
+/* сетка на 3 поля (Имя, Класс, Оплата) */
+.form .grid-3{display:grid;grid-template-columns:1fr 160px 160px;gap:12px}
+@media (max-width:800px){ .form .grid-3{grid-template-columns:1fr} }
+
+/* безопасное скрытие элементов с hidden */
+[hidden]{display:none!important}
+
