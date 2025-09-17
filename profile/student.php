@@ -40,10 +40,10 @@ $v = $_GET['v'] ?? 'all';
 $v = in_array($v, ['all','1','0'], true) ? $v : 'all';
 
 // Получаем посещения
-$sqlVisits = "SELECT id, user_id, dataa, COALESCE(visited,0) AS visited FROM dates WHERE user_id=? ";
+$sqlVisits = "SELECT user_id, dataa, COALESCE(visited,0) AS visited FROM dates WHERE user_id=? ";
 if ($v === '1')      { $sqlVisits .= "AND visited=1 "; }
 elseif ($v === '0')  { $sqlVisits .= "AND visited=0 "; }
-$sqlVisits .= "ORDER BY dataa DESC, id DESC";
+$sqlVisits .= "ORDER BY dataa DESC";
 $st = $con->prepare($sqlVisits);
 $st->bind_param('i', $user_id);
 $st->execute();
