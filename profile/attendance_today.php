@@ -1,81 +1,99 @@
 <?php
 // /profile/attendance_today.php
-if (session_status() === PHP_SESSION_NONE) session_start();
+// Полный файл: отображение списка по расписанию, массовая отметка, подтверждение и сохранение (upsert).
 
+// НЕ вызываем session_start() здесь — это делает /profile/_auth.php
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/../db_conn.php';
 require_once __DIR__ . '/../common/csrf.php';
+
+// ----------------------------- IMPORTANT -----------------------------
+// Для корректной работы upsert убедитесь, что в таблице `dates` есть уникальный индекс:
+// ALTER TABLE `dates` ADD UNIQUE KEY `uniq_user_date` (`user_id`, `dates`);
+// Выполните эту команду один раз в вашей БД (через DBeaver / phpMyAdmin / psql).
+// ---------------------------------------------------------------------
 
 // текущая дата и день недели
 $today_date = date('Y-m-d');
 $wd = (int)date('N');
 
-// обработка отправки
+// Обработка POST (сохранение посещений)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  csrf_check();
+    // CSRF (если у вас есть csrf_check)
+    if (function_exists('csrf_check')) { csrf_check(); }
 
-  $date = $_POST['date'] ?? $today_date;
+    $date = $_POST['date'] ?? $today_date;
 
-  // получаем список тех, кто был в таблице (расписание по weekday)
-  $st = $con->prepare("
-    SELECT s.user_id, CONCAT(s.lastname,' ',s.name) AS fio, sc.time
-    FROM schedule sc
-    JOIN stud s ON s.user_id = sc.user_id
-    WHERE sc.weekday=?
-    ORDER BY sc.time
-  ");
-  $st->bind_param('i', $wd);
-  $st->execute();
-  $rows = $st->get_result()->fetch_all(MYSQLI_ASSOC);
-  $st->close();
-
-  mysqli_begin_transaction($con);
-  try {
-    // подготовленные запросы
-    $sel = $con->prepare("SELECT id, visited FROM dates WHERE user_id=? AND dates=? LIMIT 1");
-    $ins = $con->prepare("INSERT INTO dates (user_id, dates, visited) VALUES (?,?,?)");
-    $upd = $con->prepare("UPDATE dates SET visited=? WHERE id=?");
-
-    foreach ($rows as $r) {
-      $uid = (int)$r['user_id'];
-      $visited = isset($_POST['visited'][$uid]) ? 1 : 0;
-
-      // проверяем есть ли запись для этой даты и ученика
-      $sel->bind_param('is', $uid, $date);
-      $sel->execute();
-      $sel->bind_result($did, $dvisited);
-      if ($sel->fetch()) {
-        $sel->free_result();
-        if ((int)$dvisited !== $visited) {
-          $upd->bind_param('ii', $visited, $did);
-          $upd->execute();
-        }
-      } else {
-        $sel->free_result();
-        $ins->bind_param('isi', $uid, $date, $visited);
-        $ins->execute();
-      }
+    // получаем список тех, кто по расписанию сегодня
+    $st = $con->prepare("
+      SELECT s.user_id, CONCAT(s.lastname,' ',s.name) AS fio, sc.time
+      FROM schedule sc
+      JOIN stud s ON s.user_id = sc.user_id
+      WHERE sc.weekday=?
+      ORDER BY sc.time
+    ");
+    if (!$st) {
+        error_log("attendance_today: prepare SELECT failed: " . $con->error);
+        http_response_code(500);
+        echo "Ошибка при получении списка по расписанию.";
+        exit;
     }
+    $st->bind_param('i', $wd);
+    $st->execute();
+    $rows = $st->get_result()->fetch_all(MYSQLI_ASSOC);
+    $st->close();
 
-    $sel->close();
-    $ins->close();
-    $upd->close();
+    // Сохраняем в транзакции с upsert
+    mysqli_begin_transaction($con);
+    try {
+        $upsert = $con->prepare(
+            "INSERT INTO `dates` (`user_id`, `dates`, `visited`) VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE `visited` = VALUES(`visited`)"
+        );
+        if (!$upsert) {
+            throw new RuntimeException("Prepare upsert failed: " . $con->error);
+        }
 
-    mysqli_commit($con);
+        foreach ($rows as $r) {
+            $uid = (int)$r['user_id'];
+            $visited = isset($_POST['visited'][$uid]) ? 1 : 0;
 
-    // flash и редирект чтобы избежать повторной отправки
-    $_SESSION['flash_attendance'] = ['date' => $date, 'count' => count($rows)];
-    header("Location: /profile/attendance_today.php");
-    exit;
-  } catch (Throwable $e) {
-    mysqli_rollback($con);
-    http_response_code(500);
-    echo "Ошибка при сохранении посещений";
-    exit;
-  }
+            // i = user_id, s = dates (YYYY-MM-DD), i = visited
+            if (!$upsert->bind_param('isi', $uid, $date, $visited)) {
+                throw new RuntimeException("Bind param failed: " . $upsert->error);
+            }
+
+            if (!$upsert->execute()) {
+                throw new RuntimeException("Execute upsert failed for user {$uid}: " . $upsert->error);
+            }
+        }
+
+        $upsert->close();
+        mysqli_commit($con);
+
+        // flash и редирект (чтобы избежать повторной отправки)
+        $_SESSION['flash_attendance'] = ['date' => $date, 'count' => count($rows)];
+        header("Location: /profile/attendance_today.php");
+        exit;
+    } catch (Throwable $e) {
+        mysqli_rollback($con);
+
+        // логируем точную ошибку для администратора
+        error_log("attendance_today: save error: " . $e->getMessage());
+
+        // показываем дружелюбное сообщение пользователю (не раскрываем детали)
+        http_response_code(500);
+        echo "<!doctype html><html><head><meta charset='utf-8'><title>Ошибка</title>";
+        echo "<link href='/profile/css/style.css' rel='stylesheet'>";
+        echo "</head><body><div class='content'><div class='card'><h2>Ошибка при сохранении посещений</h2>";
+        echo "<p>Произошла ошибка при сохранении посещений. Администратор уведомлён.</p>";
+        echo "<p><a class='btn' href='/profile/attendance_today.php'>Вернуться</a></p>";
+        echo "</div></div></body></html>";
+        exit;
+    }
 }
 
-// получение списка "кто по расписанию" для отображения
+// Получение списка "кто по расписанию" для отображения
 $st = $con->prepare("
   SELECT s.user_id, CONCAT(s.lastname,' ',s.name) AS fio, sc.time
   FROM schedule sc
@@ -83,6 +101,11 @@ $st = $con->prepare("
   WHERE sc.weekday=?
   ORDER BY sc.time
 ");
+if (!$st) {
+    error_log("attendance_today: prepare SELECT failed (display): " . $con->error);
+    echo "Ошибка при получении списка по расписанию.";
+    exit;
+}
 $st->bind_param('i', $wd);
 $st->execute();
 $today = $st->get_result()->fetch_all(MYSQLI_ASSOC);
@@ -94,7 +117,7 @@ unset($_SESSION['flash_attendance']);
 $showModal = is_array($flash);
 $modalText = $showModal ? "Посещений занесены за {$flash['date']} — строк: {$flash['count']}" : '';
 
-// подключаем общий навбар (общий файл)
+// подключаем общий навбар
 $active = 'attendance';
 ?>
 <!DOCTYPE html>
@@ -124,8 +147,8 @@ $active = 'attendance';
 
         <!-- Кнопки массовой отметки -->
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
-          <button type="button" id="markAllBtn" class="btn btn-ghost">Отметить всех</button>
-          <button type="button" id="clearAllBtn" class="btn">Снять отметки</button>
+          <button type="button" id="markAllBtn" class="btn btn-ghost" title="Отметить всех">Отметить всех</button>
+          <button type="button" id="clearAllBtn" class="btn" title="Снять отметки">Снять отметки</button>
           <div style="margin-left:auto;color:var(--muted);font-size:14px;">
             Отметки по умолчанию включены
           </div>
@@ -154,7 +177,7 @@ $active = 'attendance';
         </table>
 
         <div style="margin-top:12px; display:flex; gap:10px; align-items:center;">
-          <!-- теперь это не submit, а кнопка, открывающая модал подтверждения -->
+          <!-- кнопка открывает confirm modal -->
           <button type="button" id="saveBtn" class="btn">Сохранить посещения</button>
           <a class="btn btn-ghost" href="/profile/index.php">Отмена</a>
         </div>
@@ -209,13 +232,8 @@ $active = 'attendance';
   const clearAllBtn = document.getElementById('clearAllBtn');
   const checkboxes = () => Array.from(document.querySelectorAll('.visit-checkbox'));
 
-  markAllBtn?.addEventListener('click', () => {
-    checkboxes().forEach(cb => cb.checked = true);
-  });
-
-  clearAllBtn?.addEventListener('click', () => {
-    checkboxes().forEach(cb => cb.checked = false);
-  });
+  markAllBtn?.addEventListener('click', () => { checkboxes().forEach(cb => cb.checked = true); });
+  clearAllBtn?.addEventListener('click', () => { checkboxes().forEach(cb => cb.checked = false); });
 
   // confirm modal logic
   const saveBtn = document.getElementById('saveBtn');
@@ -225,64 +243,31 @@ $active = 'attendance';
   const confirmClose = document.getElementById('confirmClose');
   const form = document.getElementById('attendanceForm');
 
-  function openConfirm(){
-    if(!confirmModal) return;
-    confirmModal.removeAttribute('hidden');
-    document.body.classList.add('noscroll');
-    // focus on confirm button for accessibility
-    confirmSubmit?.focus();
-  }
-  function closeConfirm(){
-    if(!confirmModal) return;
-    confirmModal.setAttribute('hidden','');
-    document.body.classList.remove('noscroll');
-    saveBtn?.focus();
-  }
+  function openConfirm(){ if(!confirmModal) return; confirmModal.removeAttribute('hidden'); document.body.classList.add('noscroll'); confirmSubmit?.focus(); }
+  function closeConfirm(){ if(!confirmModal) return; confirmModal.setAttribute('hidden',''); document.body.classList.remove('noscroll'); saveBtn?.focus(); }
 
-  saveBtn?.addEventListener('click', (e)=>{
-    e.preventDefault();
-    openConfirm();
-  });
+  saveBtn?.addEventListener('click', (e)=>{ e.preventDefault(); openConfirm(); });
+  confirmCancel?.addEventListener('click', (e)=>{ e.preventDefault(); closeConfirm(); });
+  confirmClose?.addEventListener('click', (e)=>{ e.preventDefault(); closeConfirm(); });
 
-  confirmCancel?.addEventListener('click', (e)=>{
-    e.preventDefault();
-    closeConfirm();
-  });
-  confirmClose?.addEventListener('click', (e)=>{
-    e.preventDefault();
-    closeConfirm();
-  });
-  // submit from confirm
-  confirmSubmit?.addEventListener('click', (e)=>{
-    e.preventDefault();
-    // disable confirm to prevent double-submit
-    confirmSubmit.disabled = true;
-    // submit the form
-    form.submit();
-  });
+  confirmSubmit?.addEventListener('click', (e)=>{ e.preventDefault(); confirmSubmit.disabled = true; form.submit(); });
 
   // keyboard/overlay handlers
   window.addEventListener('keydown', function(e){
     if(e.key === 'Escape'){
       if(confirmModal && !confirmModal.hasAttribute('hidden')) closeConfirm();
       const successModal = document.getElementById('successModal');
-      if(successModal && !successModal.hasAttribute('hidden')) {
-        successModal.setAttribute('hidden','');
-        document.body.classList.remove('noscroll');
-      }
+      if(successModal && !successModal.hasAttribute('hidden')) { successModal.setAttribute('hidden',''); document.body.classList.remove('noscroll'); }
     }
   });
   confirmModal?.addEventListener('click', e => { if (e.target === confirmModal) closeConfirm(); });
 
-  // success modal handlers (same as before)
+  // success modal handlers
   const successModal = document.getElementById('successModal');
   const successClose = document.getElementById('modalClose');
-  if (successModal && !successModal.hasAttribute('hidden')) {
-    document.body.classList.add('noscroll');
-  }
+  if (successModal && !successModal.hasAttribute('hidden')) { document.body.classList.add('noscroll'); }
   successClose?.addEventListener('click', ()=> { successModal?.setAttribute('hidden',''); document.body.classList.remove('noscroll'); });
   successModal?.addEventListener('click', e => { if (e.target === successModal) { successModal.setAttribute('hidden',''); document.body.classList.remove('noscroll'); } });
-
 })();
 </script>
 </body>
