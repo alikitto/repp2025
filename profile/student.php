@@ -358,7 +358,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
   });
   
   // Edit/Delete Student button handlers
-  document.getElementById('btnEditStudent')?.addEventListener('click', () => location.href = `/profile/edit_student.php?user_id=${uid}`);
+  document.getElementById('btnEditStudent')?.addEventListener('click', () => location.href = `/profile/student_edit.php?user_id=${uid}`);
   document.getElementById('btnDeleteStudent')?.addEventListener('click', () => showModal(modals.deleteStudent));
   
   // Add Visit submission
