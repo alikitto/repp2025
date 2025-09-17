@@ -135,7 +135,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
               </a>
 
               <!-- Редактировать (на student_edit.php) -->
-              <a class="icon-btn" title="Редактировать" href="/profile/student_edit.php?user_id=<?= (int)$s['user_id'] ?>">
+              <a class="icon-btn" title="Редактировать" href="/profile/edit_student.php?user_id=<?= (int)$s['user_id'] ?>">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#0a5fb0"><path d="M3 21l3-1 11-11 2 2-11 11-1 3z"/><path d="M14 7l3 3"/></svg>
               </a>
             </td>
