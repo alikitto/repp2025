@@ -184,10 +184,65 @@ label{font-weight:700}
 .table.today td.col-visited { padding:10px 6px; }
 
 /* Адаптив: в карточках тоже отображаем кастомный чек */
+/* ---------- Мобильная (карточная) верстка для .table.today - исправленная ---------- */
 @media (max-width:720px) {
-  .visit-label { width:44px; height:28px; }
+  .table.today { border-collapse:separate; border-spacing:0; }
+  .table.today thead { display:none; }
+
+  /* Каждая строка — карточка */
+  .table.today tbody tr {
+    display:block;
+    margin-bottom:12px;
+    border-radius:10px;
+    background:#fff;
+    box-shadow:0 4px 14px rgba(0,0,0,0.04);
+    overflow:hidden;
+    padding:0;                 /* убираем внутренние отступы у tr */
+  }
+
+  /* Ячейки — строчки внутри карточки, делим на две колонки: label (лево) и content (право) */
+  .table.today tbody td {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:14px 16px;
+    border-bottom:1px solid var(--border);
+    box-sizing:border-box;
+  }
+  .table.today tbody td:last-child { border-bottom:0; }
+
+  /* label слева — фиксированная ширина (35%) */
+  .table.today tbody td::before {
+    content: attr(data-label);
+    display:block;
+    flex: 0 0 35%;
+    max-width: 40%;
+    font-weight:700;
+    color:#333;
+    padding-right:8px;
+    box-sizing:border-box;
+    white-space:normal;
+  }
+
+  /* контент — занимает оставшееся пространство и переносится по словам */
+  .table.today tbody td > * {
+    flex: 1 1 auto;
+    min-width:0; /* важно для переноса текста внутри flex */
+    word-break: break-word;
+  }
+
+  /* Время — делаем более заметным и не жирным слишком (если нужно) */
+  .table.today tbody td.time-cell { font-weight:600; color:#111; }
+
+  /* Для колонки с чекбоксом: центрируем содержимое */
+  .table.today tbody td.col-visited { justify-content:center; }
+
+  /* Стили кастомного чекбокса — чуть увеличим для тача */
+  .visit-label { width:44px; height:28px; display:inline-flex; align-items:center; justify-content:center; }
   .visit-custom { width:20px; height:20px; border-radius:8px; }
-  .table.today tbody td::before { width:40%; }
+
+  /* Удаляем лишние бордеры у карточки чтобы не было "двойных" линий */
+  .table.today tbody tr + tr { margin-top:8px; }
 }
 
 /* Обеспечим, что заголовки правильно разделены */
