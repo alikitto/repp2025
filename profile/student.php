@@ -92,7 +92,7 @@ $sqlVisits = "SELECT dates_id, user_id, `dates`, COALESCE(visited,0) AS visited
               FROM dates WHERE user_id=? ";
 if ($v === '1')      { $sqlVisits .= "AND visited=1 "; }
 elseif ($v === '0')  { $sqlVisits .= "AND visited=0 "; }
-$sqlVisits .= "ORDER BY `dates` DESC, dates_id DESC LIMIT 10";
+$sqlVisits .= "ORDER BY `dates` DESC, dates_id DESC";
 $st = $con->prepare($sqlVisits);
 $st->bind_param('i', $user_id);
 $st->execute();
@@ -100,7 +100,7 @@ $visits = $st->get_result()->fetch_all(MYSQLI_ASSOC);
 $st->close();
 
 // Оплаты (pays: id, user_id, date, lessons, amount)
-$st = $con->prepare("SELECT id, user_id, `date`, lessons, amount FROM pays WHERE user_id=? ORDER BY `date` DESC, id DESC LIMIT 10");
+$st = $con->prepare("SELECT id, user_id, `date`, lessons, amount FROM pays WHERE user_id=? ORDER BY `date` DESC, id DESC");
 $st->bind_param('i', $user_id);
 $st->execute();
 $pays = $st->get_result()->fetch_all(MYSQLI_ASSOC);
@@ -110,7 +110,6 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 
 function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
-function fmt_date($date){ return date('d.m.Y', strtotime($date)); }
 ?>
 <!doctype html>
 <html lang="ru">
@@ -137,7 +136,6 @@ function fmt_date($date){ return date('d.m.Y', strtotime($date)); }
     .btn.gray { background:#f1f3f5; color:#333; border-color:#e1e5ea; }
     .btn.pay { background:#9be7a0; border-color:#7bc885; color:#033; }
     .btn.sm { padding:6px 8px; border-radius:8px; font-size:13px; }
-    .btn.danger { background:#ff8a80; border-color:#ff5e57; color:#fff; }
 
     .section { margin-top:16px; }
     .tabs { display:flex; gap:6px; margin-bottom:10px; }
@@ -204,14 +202,59 @@ function fmt_date($date){ return date('d.m.Y', strtotime($date)); }
 
   <!-- Новый блок "Управление" -->
   <div class="card section">
+    <h3>Управление</h3>
     <div style="display:flex; gap:12px; margin-bottom:16px;">
-      <button class="btn primary sm" id="btnEditStudent">✎ Редактировать</button>
+      <button class="btn gray sm" id="btnEditStudent">✎ Редактировать</button>
       <button class="btn danger sm" id="btnDeleteStudent">❗ Удалить ученика</button>
     </div>
     <div style="display:flex; gap:12px;">
       <button class="btn pay sm" id="btnAddVisit">+ Посещение</button>
       <button class="btn gray sm" id="btnAddPay">+ Оплата</button>
     </div>
+  </div>
+
+  <!-- Посещения -->
+  <div class="card section">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+      <h3 style="margin:0;">Посещения</h3>
+      <div class="tabs" style="margin-left:auto;">
+        <?php
+          $base = '/profile/student.php?user_id='.(int)$user_id;
+          $mk = function($label, $val, $cur) use ($base){ $href = $base . ($val==='all' ? '' : '&v='.$val); $active = $cur===$val ? 'active' : ''; return '<a class="tab '.$active.'" href="'.h($href).'">'.h($label).'</a>'; };
+          echo $mk('Все', 'all', $v);
+          echo $mk('Пришёл', '1', $v);
+          echo $mk('Не пришёл', '0', $v);
+        ?>
+      </div>
+    </div>
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th style="width:130px;">Дата</th>
+          <th style="width:120px;">Статус</th>
+          <th style="width:120px;">Действие</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php if (!$visits): ?>
+          <tr><td colspan="3">Пока нет записей.</td></tr>
+        <?php else: foreach ($visits as $row): ?>
+          <tr>
+            <td><?= h($row['dates']) ?></td>
+            <td><?= $row['visited'] ? 'Пришёл' : 'Не пришёл' ?></td>
+            <td class="td-actions">
+              <button class="icon-btn js-del-visit"
+                      data-id="<?= (int)$row['dates_id'] ?>"
+                      data-date="<?= h($row['dates']) ?>"
+                      data-status="<?= $row['visited'] ? 'Пришёл' : 'Не пришёл' ?>">
+                Удалить
+              </button>
+            </td>
+          </tr>
+        <?php endforeach; endif; ?>
+      </tbody>
+    </table>
   </div>
 
   <!-- Оплаты -->
@@ -237,7 +280,7 @@ function fmt_date($date){ return date('d.m.Y', strtotime($date)); }
           <tr><td colspan="4">Пока оплат нет.</td></tr>
         <?php else: foreach ($pays as $p): ?>
           <tr>
-            <td><?= fmt_date($p['date']) ?></td>
+            <td><?= h($p['date']) ?></td>
             <td><?= (int)$p['lessons'] ?></td>
             <td><?= fmt_amount($p['amount']) ?></td>
             <td class="td-actions">
@@ -246,7 +289,7 @@ function fmt_date($date){ return date('d.m.Y', strtotime($date)); }
                       data-date="<?= h($p['date']) ?>"
                       data-lessons="<?= (int)$p['lessons'] ?>"
                       data-amount="<?= fmt_amount($p['amount']) ?>">
-                🗑️
+                Удалить
               </button>
             </td>
           </tr>
@@ -264,45 +307,77 @@ function fmt_date($date){ return date('d.m.Y', strtotime($date)); }
       <?php endif; ?>
     </table>
   </div>
+</div>
 
-  <!-- Посещения -->
-  <div class="card section">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
-      <h3 style="margin:0;">Посещения</h3>
-    </div>
-
-    <table class="table">
-      <thead>
-        <tr>
-          <th style="width:130px;">Дата</th>
-          <th style="width:120px;">Статус</th>
-          <th style="width:120px;">Действие</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php if (!$visits): ?>
-          <tr><td colspan="3">Пока нет записей.</td></tr>
-        <?php else: foreach ($visits as $row): ?>
-          <tr>
-            <td><?= fmt_date($row['dates']) ?></td>
-            <td><?= $row['visited'] ? 'Пришёл' : 'Не пришёл' ?></td>
-            <td class="td-actions">
-              <button class="icon-btn js-del-visit"
-                      data-id="<?= (int)$row['dates_id'] ?>"
-                      data-date="<?= fmt_date($row['dates']) ?>"
-                      data-status="<?= $row['visited'] ? 'Пришёл' : 'Не пришёл' ?>">
-                🗑️
-              </button>
-            </td>
-          </tr>
-        <?php endforeach; endif; ?>
-      </tbody>
-    </table>
+<!-- Модалка: Добавить посещение -->
+<div id="modalVisit" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <button class="modal-close js-close-visit" aria-label="Закрыть">✕</button>
+    <h3>Добавить посещение</h3>
+    <div class="muted" style="margin-bottom:8px;"><?= h($student['lastname'].' '.$student['name']) ?></div>
+    <form id="visitForm" class="form">
+      <input type="hidden" id="v_user" value="<?= (int)$student['user_id'] ?>">
+      <?php if ($csrfToken): ?><input type="hidden" id="v_csrf" value="<?= h($csrfToken) ?>"><?php endif; ?>
+      <label>Дата</label>
+      <input type="date" id="visit_date" class="input" required>
+      <label style="margin-top:8px;">Статус</label>
+      <div><label><input type="checkbox" id="visit_visited" checked> Пришёл</label></div>
+      <div class="actions">
+        <button type="button" id="visitSubmit" class="btn primary sm">Сохранить</button>
+        <button type="button" class="btn gray sm js-close-visit">Отмена</button>
+      </div>
+    </form>
   </div>
+</div>
 
-  <!-- Пагинация (загрузить еще) -->
-  <div style="text-align:center; margin-top:16px;">
-    <button class="btn gray sm" id="btnLoadMore">Загрузить еще</button>
+<!-- Модалка: Добавить оплату -->
+<div id="modalPay" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <button class="modal-close js-close-pay" aria-label="Закрыть">✕</button>
+    <h3>Добавить оплату</h3>
+    <div class="muted" style="margin-bottom:8px;"><?= h($student['lastname'].' '.$student['name']) ?></div>
+    <form id="payForm" class="form">
+      <input type="hidden" id="p_user" value="<?= (int)$student['user_id'] ?>">
+      <?php if ($csrfToken): ?><input type="hidden" id="p_csrf" value="<?= h($csrfToken) ?>"><?php endif; ?>
+
+      <label>Дата оплаты</label>
+      <input type="date" id="pay_date" class="input" required>
+
+      <label style="margin-top:8px;">Кол-во уроков</label>
+      <input type="number" id="pay_lessons" class="input" value="8" min="1" required>
+
+      <label style="margin-top:8px;">Сумма (AZN)</label>
+      <input type="text" id="pay_amount" class="input" readonly>
+      <div class="muted">Сумма берётся из ставки (money) × уроков на сервере.</div>
+
+      <div class="actions">
+        <button type="button" id="paySubmit" class="btn pay sm">Сохранить</button>
+        <button type="button" class="btn gray sm js-close-pay">Отмена</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Модалка: Подтверждение удаления -->
+<div id="modalConfirm" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <button class="modal-close js-close-confirm" aria-label="Закрыть">✕</button>
+    <h3 id="confirmTitle">Подтверждение</h3>
+    <p id="confirmText" class="muted"></p>
+    <div class="actions">
+      <button type="button" id="confirmYes" class="btn primary sm">Удалить</button>
+      <button type="button" class="btn gray sm js-close-confirm">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка: Успешно -->
+<div id="modalSuccess" class="modal" hidden>
+  <div class="modal-card success" role="dialog" aria-modal="true">
+    <button class="modal-close js-close-success" aria-label="Закрыть" style="color:#fff;">✕</button>
+    <div class="success-icon">✔</div>
+    <h3 id="successTitle" style="margin:6px 0;">Успешно</h3>
+    <p id="successText" style="opacity:.9;margin:0 0 6px 0;"></p>
   </div>
 </div>
 
@@ -315,25 +390,26 @@ function fmt_date($date){ return date('d.m.Y', strtotime($date)); }
   /* helpers */
   function showModal(m){ m.removeAttribute('hidden'); document.body.classList.add('noscroll'); }
   function hideModal(m){ m.setAttribute('hidden',''); document.body.classList.remove('noscroll'); }
+  function todayISO(){ const d=new Date(); d.setHours(0,0,0,0); return d.toISOString().slice(0,10); }
 
   const modalVisit = document.getElementById('modalVisit');
   const modalPay = document.getElementById('modalPay');
   const modalConfirm = document.getElementById('modalConfirm');
   const modalSuccess = document.getElementById('modalSuccess');
-  const modalDeleteStudent = document.getElementById('modalDeleteStudent');
   const successTitle = document.getElementById('successTitle');
   const successText = document.getElementById('successText');
+  const confirmTitle = document.getElementById('confirmTitle');
+  const confirmText = document.getElementById('confirmText');
   const confirmYes = document.getElementById('confirmYes');
-  const confirmAnswer = document.getElementById('confirmAnswer');
 
   /* open add modals */
   document.getElementById('btnAddVisit').addEventListener('click', ()=>{
-    document.getElementById('visit_date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('visit_date').value = todayISO();
     document.getElementById('visit_visited').checked = true;
     showModal(modalVisit);
   });
   document.getElementById('btnAddPay').addEventListener('click', ()=>{
-    document.getElementById('pay_date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('pay_date').value = todayISO();
     document.getElementById('pay_lessons').value = 8;
     document.getElementById('pay_amount').value = (money * 8).toFixed(2); // для показа
     showModal(modalPay);
@@ -344,7 +420,8 @@ function fmt_date($date){ return date('d.m.Y', strtotime($date)); }
   document.querySelectorAll('.js-close-pay').forEach(b=>b.addEventListener('click', ()=> hideModal(modalPay)));
   document.querySelectorAll('.js-close-confirm').forEach(b=>b.addEventListener('click', ()=> hideModal(modalConfirm)));
   document.querySelectorAll('.js-close-success').forEach(b=>b.addEventListener('click', ()=> hideModal(modalSuccess)));
-  document.querySelectorAll('.js-close-confirm').forEach(b=>b.addEventListener('click', ()=> hideModal(modalDeleteStudent)));
+  document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', (e)=>{ if (e.target === m) hideModal(m); }));
+  window.addEventListener('keydown', (e)=>{ if (e.key==='Escape'){ hideModal(modalVisit); hideModal(modalPay); hideModal(modalConfirm); hideModal(modalSuccess);} });
 
   /* recalc pay amount (visual only) */
   const payLessons = document.getElementById('pay_lessons');
@@ -356,7 +433,7 @@ function fmt_date($date){ return date('d.m.Y', strtotime($date)); }
 
   /* add visit */
   document.getElementById('visitSubmit').addEventListener('click', async ()=>{
-    const dateVal = document.getElementById('visit_date').value || new Date().toISOString().split('T')[0];
+    const dateVal = document.getElementById('visit_date').value || todayISO();
     const visited = document.getElementById('visit_visited').checked ? '1' : '';
     const form = new FormData();
     form.append('dates', dateVal);    // совместимость
@@ -377,7 +454,7 @@ function fmt_date($date){ return date('d.m.Y', strtotime($date)); }
 
   /* add pay (server calculates amount) */
   document.getElementById('paySubmit').addEventListener('click', async ()=>{
-    const date = document.getElementById('pay_date').value || new Date().toISOString().split('T')[0];
+    const date = document.getElementById('pay_date').value || todayISO();
     const lessons = parseInt(document.getElementById('pay_lessons').value || '8', 10) || 8;
     const form = new FormData();
     form.append('user_id', uid);
@@ -440,12 +517,7 @@ function fmt_date($date){ return date('d.m.Y', strtotime($date)); }
     } catch(e){ alert('Ошибка удаления: ' + e.message); }
   });
 
-  /* Удаление ученика */
-  document.getElementById('btnDeleteStudent').addEventListener('click', ()=>{
-    showModal(modalDeleteStudent);
-  });
 })();
 </script>
 </body>
 </html>
- 
