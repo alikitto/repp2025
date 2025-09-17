@@ -1,5 +1,5 @@
 <?php
-// /profile/student.php — карточка ученика (аккуратная, в стиле CRM)
+// /profile/student.php — карточка ученика
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/../db_conn.php';
 require_once __DIR__ . '/../common/csrf.php';
@@ -16,8 +16,7 @@ $st->close();
 
 if (!$student) { http_response_code(404); echo "Ученика не найдено"; exit; }
 
-// --- Подсчёты: посещения, оплаты, баланс
-// Кол-во посещений (visited=1)
+// Подсчёты: посещения, оплаты, баланс
 $st = $con->prepare("SELECT COUNT(*) FROM dates WHERE user_id=? AND visited=1");
 $st->bind_param('i', $user_id);
 $st->execute();
@@ -25,7 +24,6 @@ $st->bind_result($visits_count);
 $st->fetch();
 $st->close();
 
-// Сумма оплаченных уроков + кол-во оплат
 $st = $con->prepare("SELECT COALESCE(SUM(lessons),0) AS paid_lessons, COUNT(*) AS pays_count FROM pays WHERE user_id=?");
 $st->bind_param('i', $user_id);
 $st->execute();
@@ -39,11 +37,11 @@ $balance_lessons = (int)$paid_lessons - (int)$visits_count; // >0 — предо
 $v = $_GET['v'] ?? 'all';
 $v = in_array($v, ['all','1','0'], true) ? $v : 'all';
 
-// Получаем посещения
-$sqlVisits = "SELECT user_id, dataa, COALESCE(visited,0) AS visited FROM dates WHERE user_id=? ";
+// Получаем посещения (исправлено: используем столбец `date`, а не dataa; убран id)
+$sqlVisits = "SELECT user_id, `date`, COALESCE(visited,0) AS visited FROM dates WHERE user_id=? ";
 if ($v === '1')      { $sqlVisits .= "AND visited=1 "; }
 elseif ($v === '0')  { $sqlVisits .= "AND visited=0 "; }
-$sqlVisits .= "ORDER BY dataa DESC";
+$sqlVisits .= "ORDER BY `date` DESC";
 $st = $con->prepare($sqlVisits);
 $st->bind_param('i', $user_id);
 $st->execute();
@@ -57,10 +55,9 @@ $st->execute();
 $pays = $st->get_result()->fetch_all(MYSQLI_ASSOC);
 $st->close();
 
-// Токен CSRF, если реализован
+// CSRF
 $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 
-// Утилиты форматирования
 function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
 ?>
@@ -86,7 +83,6 @@ function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
     .tab { padding:6px 10px; border:1px solid var(--border); border-radius:8px; background:#fff; cursor:pointer; text-decoration:none; color:inherit; }
     .tab.active { background:#0a5fb0; color:#fff; border-color:#0a5fb0; }
     .table tfoot td { font-weight:600; }
-    /* Простые модалки в стиле CRM */
     .modal { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.4); z-index:1000; }
     .modal[hidden]{ display:none; }
     .modal-card { background:#fff; padding:18px; border-radius:10px; width:420px; max-width:95%; box-shadow:0 10px 30px rgba(0,0,0,0.2); position:relative; }
@@ -157,7 +153,7 @@ function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
           <tr><td colspan="3">Пока нет записей.</td></tr>
         <?php else: foreach ($visits as $row): ?>
           <tr>
-            <td><?= h($row['dataa']) ?></td>
+            <td><?= h($row['date']) ?></td>
             <td><?= $row['visited'] ? 'Пришёл' : 'Не пришёл' ?></td>
             <td class="muted">—</td>
           </tr>
@@ -277,7 +273,6 @@ function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
 
 <script>
 (function(){
-  // helpers
   const modalVisit = document.getElementById('modalVisit');
   const modalPay = document.getElementById('modalPay');
   function showModal(m){ m.removeAttribute('hidden'); document.body.classList.add('noscroll'); }
@@ -285,7 +280,6 @@ function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
   function todayISO(){ const d=new Date(); d.setHours(0,0,0,0); return d.toISOString().slice(0,10); }
   const money = <?= json_encode((float)$student['money']) ?>;
 
-  // --- Кнопки на тулбаре
   document.getElementById('btnAddVisit').addEventListener('click', ()=>{
     document.getElementById('visit_date').value = todayISO();
     document.getElementById('visit_visited').checked = true;
@@ -302,7 +296,6 @@ function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
     showModal(modalPay);
   });
 
-  // Закрытие модалок
   document.querySelectorAll('.js-close-visit').forEach(b=>b.addEventListener('click', ()=> hideModal(modalVisit)));
   document.querySelectorAll('.js-close-pay').forEach(b=>b.addEventListener('click', ()=> hideModal(modalPay)));
   document.querySelectorAll('.modal').forEach(m => {
@@ -310,7 +303,6 @@ function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
   });
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ hideModal(modalVisit); hideModal(modalPay);} });
 
-  // Подтверждение чекбоксы
   document.getElementById('visit_confirm').addEventListener('change', e=>{
     document.getElementById('visitSubmit').disabled = !e.target.checked;
   });
@@ -318,7 +310,6 @@ function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
     document.getElementById('paySubmit').disabled = !e.target.checked;
   });
 
-  // Пересчёт суммы оплаты при изменении уроков
   const payLessons = document.getElementById('pay_lessons');
   const payAmount = document.getElementById('pay_amount');
   payLessons.addEventListener('input', ()=>{
@@ -326,9 +317,8 @@ function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
     payAmount.value = (money * lessons).toFixed(2);
   });
 
-  // Отправка посещения
-  const visitSubmit = document.getElementById('visitSubmit');
-  visitSubmit.addEventListener('click', async ()=>{
+  // Отправка посещения — сервер ожидает поле POST name="dataa" (оставлено как было)
+  document.getElementById('visitSubmit').addEventListener('click', async ()=>{
     const date = document.getElementById('visit_date').value || todayISO();
     const visited = document.getElementById('visit_visited').checked ? '1' : '';
     const uid = <?= (int)$user_id ?>;
@@ -341,7 +331,6 @@ function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
     try {
       const resp = await fetch('/add/dates.php?user_id='+uid, { method:'POST', body:form, credentials:'same-origin' });
       if (!resp.ok) throw new Error('HTTP '+resp.status);
-      // Страница может вернуть HTML — просто перезагрузим
       hideModal(modalVisit);
       location.reload();
     } catch(e){
@@ -350,8 +339,7 @@ function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
   });
 
   // Отправка оплаты
-  const paySubmit = document.getElementById('paySubmit');
-  paySubmit.addEventListener('click', async ()=>{
+  document.getElementById('paySubmit').addEventListener('click', async ()=>{
     const uid = <?= (int)$user_id ?>;
     const date = document.getElementById('pay_date').value || todayISO();
     const lessons = parseInt(document.getElementById('pay_lessons').value || '8', 10) || 8;
