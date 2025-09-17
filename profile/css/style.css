@@ -128,3 +128,6 @@ label{font-weight:700}
 .login-card label{display:block;margin-top:8px;font-size:13px}
 .login-card input{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px}
 .login-card button{width:100%;margin-top:12px;padding:10px;border:none;border-radius:8px;background:var(--brand);color:#fff;cursor:pointer}
+
+/* гарантируем скрытие элементов с атрибутом hidden */
+[hidden] { display: none !important; }
