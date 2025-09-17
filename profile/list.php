@@ -1,12 +1,11 @@
 <?php
-// /profile/list.php  (упрощённая версия — убран столбец "Баланс")
+// /profile/list.php  (упрощённая версия — убран поиск и кнопки фильтра)
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/../db_conn.php';
 require_once __DIR__ . '/../common/csrf.php';
 
-// Параметры фильтра
+// Параметр фильтра
 $klass = trim($_GET['klass'] ?? '');
-$q     = trim($_GET['q'] ?? '');
 
 // Получаем список классов для фильтра
 $res = $con->query("SELECT DISTINCT COALESCE(NULLIF(klass,''),'') AS klass FROM stud ORDER BY klass");
@@ -36,19 +35,11 @@ $where = [];
 $params = [];
 $types = '';
 
-// Фильтр по классу
+// Фильтр по классу (отправляется автоматически при выборе)
 if ($klass !== '') {
     $where[] = "s.klass = ?";
     $params[] = $klass;
     $types .= 's';
-}
-
-// Поиск
-if ($q !== '') {
-    $where[] = "(s.name LIKE ? OR s.lastname LIKE ? OR CONCAT(s.lastname,' ',s.name) LIKE ? OR s.phone LIKE ?)";
-    $like = "%$q%";
-    $params[] = $like; $params[] = $like; $params[] = $like; $params[] = $like;
-    $types .= 'ssss';
 }
 
 if ($where) $sql .= " WHERE " . implode(' AND ', $where);
@@ -86,8 +77,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
   <style>
     /* Локальные стили для страницы списка */
     .filter-row { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
-    .filter-row .search { flex:1; min-width:160px; }
-    .actions-panel { display:flex; gap:8px; align-items:center; justify-content:flex-end; }
+    .filter-row .select { min-width:200px; padding:10px; border-radius:8px; border:1px solid var(--border); }
     .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:8px; border:1px solid var(--border); background:#fff; cursor:pointer; }
     .icon-btn:hover { box-shadow:0 6px 18px rgba(0,0,0,0.06); }
     .icon-btn svg{ width:18px; height:18px; stroke:currentColor; }
@@ -109,20 +99,14 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     </div>
 
     <div class="filter-row" style="margin-top:12px;">
-      <form id="filterForm" method="get" style="display:flex;align-items:center;gap:8px;width:100%;">
-        <select name="klass" onchange="this.form.submit()" style="padding:10px;border-radius:8px;border:1px solid var(--border);">
-          <option value=""><?= htmlspecialchars('Класс (по умолчанию)') ?></option>
+      <!-- Форма с автосабмитом при выборе класса -->
+      <form id="filterForm" method="get" style="width:100%;">
+        <select name="klass" class="select" onchange="this.form.submit()">
+          <option value=""><?= htmlspecialchars('Выберите класс') ?></option>
           <?php foreach ($classes as $c): ?>
             <option value="<?= htmlspecialchars($c) ?>" <?= $c === $klass ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
           <?php endforeach; ?>
         </select>
-
-        <input class="search input" type="search" name="q" placeholder="Поиск по имени или телефону" value="<?= htmlspecialchars($q) ?>">
-
-        <div class="actions-panel">
-          <button type="submit" class="btn btn-ghost">Применить</button>
-          <a class="btn" href="/profile/list.php">Сброс</a>
-        </div>
       </form>
     </div>
 
