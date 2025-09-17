@@ -204,7 +204,6 @@ function fmt_date($date){ return date('d.m.Y', strtotime($date)); }
 
   <!-- Новый блок "Управление" -->
   <div class="card section">
-    <h3>Управление</h3>
     <div style="display:flex; gap:12px; margin-bottom:16px;">
       <button class="btn primary sm" id="btnEditStudent">✎ Редактировать</button>
       <button class="btn danger sm" id="btnDeleteStudent">❗ Удалить ученика</button>
@@ -300,30 +299,10 @@ function fmt_date($date){ return date('d.m.Y', strtotime($date)); }
       </tbody>
     </table>
   </div>
-</div>
 
-<!-- Модалка: Успешно -->
-<div id="modalSuccess" class="modal" hidden>
-  <div class="modal-card success" role="dialog" aria-modal="true">
-    <button class="modal-close js-close-success" aria-label="Закрыть" style="color:#fff;">✕</button>
-    <div class="success-icon">✔</div>
-    <h3 id="successTitle" style="margin:6px 0;">Успешно</h3>
-    <p id="successText" style="opacity:.9;margin:0 0 6px 0;"></p>
-  </div>
-</div>
-
-<!-- Модалка: Подтверждение удаления ученика -->
-<div id="modalDeleteStudent" class="modal" hidden>
-  <div class="modal-card" role="dialog" aria-modal="true">
-    <button class="modal-close js-close-confirm" aria-label="Закрыть">✕</button>
-    <h3>❗ Внимание!</h3>
-    <p>При удалении ученика все его данные будут удалены навсегда!</p>
-    <p>Для подтверждения введите: <b>13 + 9</b></p>
-    <input type="number" id="confirmAnswer" class="input" required>
-    <div class="actions">
-      <button type="button" id="confirmYes" class="btn danger sm">Удалить</button>
-      <button type="button" class="btn gray sm js-close-confirm">Отмена</button>
-    </div>
+  <!-- Пагинация (загрузить еще) -->
+  <div style="text-align:center; margin-top:16px;">
+    <button class="btn gray sm" id="btnLoadMore">Загрузить еще</button>
   </div>
 </div>
 
