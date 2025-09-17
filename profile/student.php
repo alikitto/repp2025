@@ -37,18 +37,19 @@ $balance_lessons = (int)$paid_lessons - (int)$visits_count; // >0 — предо
 $v = $_GET['v'] ?? 'all';
 $v = in_array($v, ['all','1','0'], true) ? $v : 'all';
 
-// Получаем посещения (исправлено: используем столбец `date`, а не dataa; убран id)
-$sqlVisits = "SELECT user_id, `date`, COALESCE(visited,0) AS visited FROM dates WHERE user_id=? ";
+// Получаем посещения (ИСПРАВЛЕНО: колонка `dates`, есть ключ `dates_id`)
+$sqlVisits = "SELECT dates_id, user_id, `dates`, COALESCE(visited,0) AS visited
+              FROM dates WHERE user_id=? ";
 if ($v === '1')      { $sqlVisits .= "AND visited=1 "; }
 elseif ($v === '0')  { $sqlVisits .= "AND visited=0 "; }
-$sqlVisits .= "ORDER BY `date` DESC";
+$sqlVisits .= "ORDER BY `dates` DESC, dates_id DESC";
 $st = $con->prepare($sqlVisits);
 $st->bind_param('i', $user_id);
 $st->execute();
 $visits = $st->get_result()->fetch_all(MYSQLI_ASSOC);
 $st->close();
 
-// Получаем оплаты
+// Получаем оплаты (у pays поле даты называется `date`)
 $st = $con->prepare("SELECT id, user_id, `date`, lessons, amount FROM pays WHERE user_id=? ORDER BY `date` DESC, id DESC");
 $st->bind_param('i', $user_id);
 $st->execute();
@@ -153,7 +154,7 @@ function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
           <tr><td colspan="3">Пока нет записей.</td></tr>
         <?php else: foreach ($visits as $row): ?>
           <tr>
-            <td><?= h($row['date']) ?></td>
+            <td><?= h($row['dates']) ?></td>
             <td><?= $row['visited'] ? 'Пришёл' : 'Не пришёл' ?></td>
             <td class="muted">—</td>
           </tr>
@@ -219,7 +220,7 @@ function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
       <?php if ($csrfToken): ?><input type="hidden" name="csrf" value="<?= h($csrfToken) ?>"><?php endif; ?>
 
       <label>Дата</label>
-      <input type="date" name="dataa" id="visit_date" class="input" required>
+      <input type="date" id="visit_date" class="input" required>
 
       <label style="margin-top:8px;">Статус</label>
       <div>
@@ -317,14 +318,15 @@ function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
     payAmount.value = (money * lessons).toFixed(2);
   });
 
-  // Отправка посещения — сервер ожидает поле POST name="dataa" (оставлено как было)
+  // Отправка посещения: добавляю И 'dates', И 'dataa' — на случай, если сервер ждёт одно из них
   document.getElementById('visitSubmit').addEventListener('click', async ()=>{
-    const date = document.getElementById('visit_date').value || todayISO();
+    const dateVal = document.getElementById('visit_date').value || todayISO();
     const visited = document.getElementById('visit_visited').checked ? '1' : '';
     const uid = <?= (int)$user_id ?>;
 
     const form = new FormData();
-    form.append('dataa', date);
+    form.append('dates', dateVal);
+    form.append('dataa', dateVal); // совместимость со старым обработчиком
     if (visited) form.append('visited', '1');
     <?php if ($csrfToken): ?> form.append('csrf', '<?= addslashes($csrfToken) ?>'); <?php endif; ?>
 
