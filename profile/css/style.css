@@ -1,83 +1,47 @@
-/* profile/css/style.css — полный файл */
-
-/* ========== Переменные ========== */
 :root{
-  --bg:#f7f7f9;
-  --card:#fff;
-  --border:#e7e7e7;
-  --brand:#0a5fb0;
-  --brand-600:#0a4c80;
-  --danger:#b00020;
-  --muted:#6b7280;
-  --shadow:0 8px 28px rgba(0,0,0,.06);
+  --bg:#f7f7f9; --card:#fff; --border:#e7e7e7;
+  --brand:#0a5fb0; --brand-600:#0a4c80;
+  --danger:#b00020; --muted:#6b7280; --shadow:0 8px 28px rgba(0,0,0,.06);
 }
 
-/* ========== БАЗОВЫЕ СБРОСЫ ========== */
 *{box-sizing:border-box}
 html,body{height:100%}
 body{
-  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
-  margin:0;
-  background:var(--bg);
-  color:#222;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  margin:0; background:var(--bg); color:#222;
 }
 a{color:var(--brand);text-decoration:none}
 a:hover{color:var(--brand-600)}
 .link-strong{color:#b45309}
-.content{max-width:960px;margin:16px auto;padding:0 12px}
+.content{max-width:960px;margin:16px auto;padding:0 12px;}
 .noscroll{overflow:hidden}
 
-/* ========== КАРТОЧКИ / ОБЩИЙ LAYOUT ========== */
-.card{
-  background:var(--card);
-  border-radius:12px;
-  box-shadow:var(--shadow);
-  padding:16px;
-  margin:16px 0;
-}
+/* Карточки */
+.card{background:var(--card);border-radius:12px;box-shadow:var(--shadow);padding:16px;margin:16px 0}
 h2{margin:0 0 12px}
 
-/* ========== ГЛОБАЛЬНЫЕ ТАБЛИЦЫ (без ломания остальных страниц) ========== */
+/* Таблицы */
 .table{
-  border-collapse:collapse;
-  width:100%;
-  background:#fff;
-  border:1px solid var(--border);
-  border-radius:10px;
-  overflow:hidden;
+  border-collapse:separate;border-spacing:0;width:100%;
+  background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;
 }
 .table thead th{
-  background:#e9edf2;
-  font-weight:700;
-  padding:14px 16px;
-  text-align:left;
-  border-bottom:1px solid var(--border);
+  background:#e9edf2;font-weight:700;padding:14px 16px;text-align:left;border-bottom:1px solid var(--border);
   font-size:16px;
 }
-.table tbody td{
-  padding:14px 16px;
-  border-bottom:1px solid var(--border);
-  vertical-align:middle;
-  font-size:16px;
-}
+.table tbody td{padding:14px 16px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:16px}
 .table tbody tr:last-child td{border-bottom:none}
 
-/* Специфика для .today (главная) — привычный вид */
+/* «Кто приходит сегодня» — разделитель и выравнивание времени */
 .today{table-layout:fixed}
 .today thead th:first-child,.today tbody td:first-child{width:60%;border-right:1px solid var(--border)}
 .today thead th:nth-child(2),.today tbody td:nth-child(2){width:40%}
-.today .time-cell{
-  text-align:right;
-  font-weight:700;
-  letter-spacing:.02em;
-  padding-right:20px;
-  font-variant-numeric:tabular-nums;
-}
+.today .time-cell{text-align:right;font-weight:700;letter-spacing:.02em;padding-right:20px;font-variant-numeric:tabular-nums}
 
 /* Должники */
 .debtors .debt{color:var(--danger);font-weight:700;text-align:right}
 
-/* ========== ТОПБАР / ГАМБУРГЕР / SIDEMENU ========== */
+/* Топбар + гамбургер */
 .topbar{
   position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;
   background:#fff;border-bottom:1px solid var(--border);padding:10px 12px;
@@ -98,7 +62,9 @@ h2{margin:0 0 12px}
 }
 .sidemenu.open{transform:translateX(0)}
 .menu-header{padding:10px 12px;font-weight:700;color:#111}
-.sidemenu a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;color:#111}
+.sidemenu a{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;color:#111
+}
 .sidemenu a:hover{background:#eef5ff;color:var(--brand)}
 .sidemenu a.active{background:#e9f2ff;color:var(--brand)}
 .sidemenu .icon{width:18px;height:18px;display:inline-flex}
@@ -107,18 +73,20 @@ h2{margin:0 0 12px}
 .muted{color:var(--muted)}
 .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:45}
 
-/* ========== КНОПКИ ========== */
+/* Кнопки */
 .btn{
   display:inline-flex;align-items:center;gap:8px;
   background:var(--brand);color:#fff;border:none;border-radius:8px;padding:10px 14px;cursor:pointer;
-  text-decoration:none;font-weight:600;
+  text-decoration:none;font-weight:600
 }
 .btn:hover{background:var(--brand-600)}
 .btn-ic{width:18px;height:18px;stroke:currentColor}
-.btn-ghost{background:#eef5ff;color:var(--brand)}
+.btn-ghost{
+  background:#eef5ff;color:var(--brand);
+}
 .btn-ghost:hover{background:#e1efff}
 
-/* ========== ФОРМЫ ========== */
+/* Формы */
 .form{display:block}
 .form .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:640px){ .form .grid-2{grid-template-columns:1fr} }
@@ -130,7 +98,7 @@ label{font-weight:700}
 }
 .w-240{max-width:260px}
 
-/* Крупные селекты расписания */
+/* крупные селекты расписания */
 .select-big{font-size:17px;padding:12px 14px;border-radius:10px}
 .schedule-table tbody td:first-child{border-right:1px solid var(--border)}
 
@@ -154,135 +122,28 @@ label{font-weight:700}
 }
 .modal-close:hover{background:#f1f5f9}
 
-/* ========== ЛОГИН ========== */
+/* Логин (оставил) */
 .login-card{max-width:340px;margin:12vh auto;background:var(--card);padding:24px;border-radius:12px;box-shadow:var(--shadow)}
 .login-card h1{margin:0 0 12px;font-size:20px}
 .login-card label{display:block;margin-top:8px;font-size:13px}
 .login-card input{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px}
 .login-card button{width:100%;margin-top:12px;padding:10px;border:none;border-radius:8px;background:var(--brand);color:#fff;cursor:pointer}
 
-/* Скрытие элементов с атрибутом hidden */
-[hidden]{display:none!important}
+/* гарантируем скрытие элементов с атрибутом hidden */
+[hidden] { display: none !important; }
 
-/* Сетка на 3 поля (Добавление ученика) */
+/* сетка на 3 поля (Имя, Класс, Оплата) */
 .form .grid-3{display:grid;grid-template-columns:1fr 160px 160px;gap:12px}
 @media (max-width:800px){ .form .grid-3{grid-template-columns:1fr} }
 
-/* ========== УДОБСТВА ========== */
-.attendance-note{color:var(--muted);font-size:14px}
+/* безопасное скрытие элементов с hidden */
+[hidden]{display:none!important}
 
-/* ========== SPAECIFIC: attendance_today (scope .attendance-page) ========== */
-/* ВСЕ стили, которые могут ломать — применяются ТОЛЬКО если body имеет класс .attendance-page */
-
-/* Базовые таблицы на странице attendance */
-.attendance-page .table.today th {
-  background: #eef1f4;
-  border-bottom: 1px solid var(--border);
-  padding: 12px 14px;
-  text-align: left;
-  font-weight: 700;
-}
-.attendance-page .table.today th:not(:last-child){ border-right:1px solid rgba(0,0,0,0.06); }
-.attendance-page .table.today td{ padding:12px 14px; border-bottom:1px solid rgba(0,0,0,0.04); }
-
-/* Ширина колонки "Посетил" */
-.attendance-page .table.today th:nth-child(3),
-.attendance-page .table.today td.col-visited { width:110px; text-align:center; }
-
-/* В desktop: скрываем явные cell-label (они нужны только для мобильной карточной верстки) */
-.attendance-page .cell-wrap .cell-label { display:none; }
-
-/* Правила для .cell-wrap: внутри каждой td располагаются .cell-label + .cell-content */
-.attendance-page .cell-wrap { display:flex; align-items:center; gap:12px; }
-.attendance-page .cell-wrap .cell-content { flex:1 1 auto; min-width:0; }
-
-/* Кастомный чек — scope */
-.attendance-page .visit-label { display:inline-flex; align-items:center; justify-content:center; cursor:pointer; position:relative; width:36px; height:24px; margin:0 auto; }
-.attendance-page .visit-label input.visit-checkbox { position:absolute; opacity:0; width:1px; height:1px; left:-9999px; }
-.attendance-page .visit-custom {
-  display:inline-block; width:18px; height:18px; border-radius:6px;
-  border:2px solid rgba(10,95,176,0.18); background:#fff; box-shadow:inset 0 -2px 0 rgba(0,0,0,0.02);
-  transition: all .12s ease;
-}
-.attendance-page .visit-label input.visit-checkbox:checked + .visit-custom {
-  background: linear-gradient(180deg, #0a5fb0, #084b88);
-  border-color: rgba(10,95,176,1);
-  box-shadow: 0 2px 6px rgba(10,95,176,0.12);
-  transform: scale(1.02);
-}
-.attendance-page .visit-label input.visit-checkbox:checked + .visit-custom::after {
-  content: ''; display:block; width:6px; height:10px; border: solid #fff; border-width:0 2px 2px 0;
-  transform: rotate(40deg) translateY(-1px); margin: 1px 0 0 6px; box-sizing:content-box;
-}
-.attendance-page .table.today td.col-visited { padding:10px 6px; }
-
-/* ========== Scoped mobile layout (attendance-page) — карточный вид ========== */
+/* --- улучшения для attendance_today table --- */
+.table.today th { background:#eef1f4; border-bottom:1px solid var(--border); padding:12px 14px; text-align:left; font-weight:700; }
+.table.today th:not(:last-child){ border-right:1px solid rgba(0,0,0,0.06); }
+.table.today td { padding:12px 14px; border-bottom:1px solid rgba(0,0,0,0.04); }
 @media (max-width:720px) {
-  .attendance-page .table.today { border-collapse:separate; border-spacing:0; }
-  .attendance-page .table.today thead { display:none; }
-
-  .attendance-page .table.today tbody tr {
-    display:block;
-    margin-bottom:12px;
-    border-radius:10px;
-    background:#fff;
-    box-shadow:0 4px 14px rgba(0,0,0,0.04);
-    overflow:hidden;
-    padding:0;
-  }
-
-  /* В мобильном: каждая td — flex ряд, но внутри ожидаем .cell-wrap */
-  .attendance-page .table.today tbody td {
-    display:block; /* outer td является блоком, внутри будет .cell-wrap для flex-верстки */
-    padding:0;
-    border-bottom:0;
-  }
-
-  .attendance-page .table.today tbody td .cell-wrap {
-    display:flex;
-    align-items:center;
-    gap:12px;
-    padding:14px 16px;
-    border-bottom:1px solid var(--border);
-    box-sizing:border-box;
-  }
-
-  .attendance-page .table.today tbody td .cell-wrap:last-child { border-bottom:0; }
-
-  /* label (видимый на мобильных) */
-  .attendance-page .cell-wrap .cell-label {
-    display:block;
-    flex:0 0 36%;
-    max-width:40%;
-    font-weight:700;
-    color:#333;
-    padding-right:8px;
-    box-sizing:border-box;
-    white-space:normal;
-  }
-
-  /* контент справа */
-  .attendance-page .cell-wrap .cell-content {
-    flex:1 1 auto;
-    min-width:0;
-    word-break:break-word;
-  }
-
-  .attendance-page .table.today tbody td.time-cell .cell-wrap .cell-content {
-    text-align:right;
-    font-weight:600;
-    color:#111;
-  }
-
-  .attendance-page .table.today tbody td.col-visited .cell-wrap { justify-content:center; }
-
-  /* увеличиваем touch-область чекбокса */
-  .attendance-page .visit-label { width:44px; height:28px; padding:6px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; }
-  .attendance-page .visit-custom { width:20px; height:20px; border-radius:8px; }
-
-  .attendance-page .table.today tbody tr + tr { margin-top:8px; }
+  .table.today tbody td { padding:12px 16px; }
+  .visit-checkbox { transform:scale(1.05); }
 }
-
-/* разделители заголовков (глобально) */
-.table.today thead th { border-bottom:1px solid rgba(0,0,0,0.06); }
-.table.today thead th:not(:last-child) { border-right:1px solid rgba(0,0,0,0.04); }
