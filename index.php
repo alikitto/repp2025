@@ -1,4 +1,3 @@
 <?php
-// /index.php (в корне репозитория)
-header('Location: /profile/index.php', true, 302);
-exit;
+// /index.php
+require_once __DIR__ . '/profile/index.php';
