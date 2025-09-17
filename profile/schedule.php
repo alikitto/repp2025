@@ -2,8 +2,7 @@
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/../db_conn.php';
 
-// 1. Получаем ВСЕ записи из расписания, сразу объединяя с именами учеников
-// Сортируем по дню недели, а затем по времени — это ключ к правильной группировке
+// 1. Получаем ВСЕ записи из расписания, отсортированные по дню и времени
 $all_schedule_flat = $con->query("
     SELECT
         sc.weekday,
@@ -15,10 +14,12 @@ $all_schedule_flat = $con->query("
     ORDER BY sc.weekday, sc.time
 ")->fetch_all(MYSQLI_ASSOC);
 
-// 2. Группируем полученные данные по дням недели для удобного вывода
-$schedule_by_day = [];
+// 2. Создаем более сложную структуру: группируем учеников по дню, а затем по времени
+// Это позволит нам легко посчитать, сколько учеников в каждом временном слоте
+$schedule_grouped = [];
 foreach ($all_schedule_flat as $item) {
-    $schedule_by_day[$item['weekday']][] = $item;
+    $time_key = substr($item['time'], 0, 5); // Используем время 'ЧЧ:ММ' как ключ
+    $schedule_grouped[$item['weekday']][$time_key][] = $item;
 }
 
 // 3. Карта для преобразования номера дня в название
@@ -27,9 +28,9 @@ $weekdays_map = [
     5 => 'Пятница', 6 => 'Суббота', 7 => 'Воскресенье'
 ];
 
-// 4. Массив с классами для цветных кружков
-$dot_colors = ['dot-blue', 'dot-purple', 'dot-yellow'];
-$dot_colors_count = count($dot_colors);
+// 4. Массив с классами для цветных кружков ГРУППОВЫХ занятий
+$group_dot_colors = ['dot-blue', 'dot-purple', 'dot-yellow'];
+$group_dot_colors_count = count($group_dot_colors);
 
 // Указываем активный пункт меню для навбара
 $active = 'schedule';
@@ -52,9 +53,8 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
             padding-bottom: 4px;
             border-bottom: 1px solid #dee2e6;
         }
-        /* --- Новые стили для кружков и группировки --- */
         .schedule-table tbody tr td {
-            background-color: #fff; /* Убираем чередующийся фон, делаем все строки белыми */
+            background-color: #fff;
         }
         /* Стиль для жирной нижней рамки у последней строки в группе */
         .schedule-table tbody tr.group-last-row td {
@@ -63,23 +63,22 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
         .time-cell {
             font-weight: 500;
         }
-        /* Контейнер для кружка и имени, чтобы они были на одной линии */
         .student-cell {
             display: flex;
             align-items: center;
-            gap: 12px; /* Расстояние между кружком и именем */
+            gap: 12px;
         }
-        /* Базовый стиль для цветного кружка */
         .color-dot {
             width: 10px;
             height: 10px;
             border-radius: 50%;
-            flex-shrink: 0; /* Предотвращает сжатие кружка */
+            flex-shrink: 0;
         }
         /* Цвета для кружков */
         .dot-blue { background-color: #0d6efd; }
         .dot-purple { background-color: #6f42c1; }
         .dot-yellow { background-color: #ffc107; }
+        .dot-gray { background-color: #6c757d; } /* Новый серый цвет для одиночных */
     </style>
 </head>
 <body>
@@ -95,11 +94,11 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
                 <h2><?= $wd_name ?></h2>
 
                 <?php
-                $students_for_this_day = $schedule_by_day[$wd_num] ?? [];
-                $student_count = count($students_for_this_day);
+                // Получаем расписание на текущий день из сгруппированного массива
+                $day_schedule = $schedule_grouped[$wd_num] ?? [];
                 ?>
 
-                <?php if (empty($students_for_this_day)): ?>
+                <?php if (empty($day_schedule)): ?>
                     <p class="muted">В этот день занятий нет.</p>
                 <?php else: ?>
                     <table class="table schedule-table">
@@ -111,42 +110,39 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
                         </thead>
                         <tbody>
                             <?php
-                            $last_time = null;
-                            $group_idx = 0; // Индекс для выбора цвета
-                            for ($i = 0; $i < $student_count; $i++):
-                                $student = $students_for_this_day[$i];
-                                $next_student = $students_for_this_day[$i + 1] ?? null;
+                            $group_color_idx = 0; // Счетчик только для групповых занятий
+                            // Перебираем временные слоты (ключ - время, значение - массив учеников)
+                            foreach ($day_schedule as $time => $students_in_group):
+                                $group_size = count($students_in_group);
+                                $color_class = '';
 
-                                $current_time = substr($student['time'], 0, 5);
-                                
-                                // Если время сменилось, увеличиваем индекс для выбора нового цвета
-                                if ($current_time !== $last_time) {
-                                    $group_idx++;
+                                if ($group_size > 1) {
+                                    // Если учеников больше одного - это группа. Используем циклический цвет.
+                                    $color_class = $group_dot_colors[$group_color_idx % $group_dot_colors_count];
+                                    $group_color_idx++; // Увеличиваем счетчик только для групп
+                                } else {
+                                    // Если ученик один - это индивидуальное занятие. Используем серый.
+                                    $color_class = 'dot-gray';
                                 }
-                                
-                                // Выбираем класс цвета по кругу из массива $dot_colors
-                                $color_class = $dot_colors[($group_idx - 1) % $dot_colors_count];
 
-                                // Проверяем, является ли эта запись последней в группе, чтобы добавить бордер
-                                $row_class = '';
-                                if ($next_student === null || $current_time !== substr($next_student['time'], 0, 5)) {
-                                    $row_class = 'group-last-row';
-                                }
-                                
-                                $last_time = $current_time;
-                            ?>
-                                <tr class="<?= $row_class ?>">
-                                    <td class="student-cell">
-                                        <span class="color-dot <?= $color_class ?>"></span>
-                                        <a class="link-strong" href="/profile/student.php?user_id=<?= (int)$student['user_id'] ?>">
-                                            <?= h($student['fio']) ?>
-                                        </a>
-                                    </td>
-                                    <td class="time-cell">
-                                        <?= h($current_time) ?>
-                                    </td>
-                                </tr>
-                            <?php endfor; ?>
+                                // Перебираем учеников внутри этой временной группы
+                                foreach ($students_in_group as $key => $student):
+                                    // Проверяем, является ли ученик последним в группе, чтобы добавить бордер
+                                    $row_class = ($key === $group_size - 1) ? 'group-last-row' : '';
+                                ?>
+                                    <tr class="<?= $row_class ?>">
+                                        <td class="student-cell">
+                                            <span class="color-dot <?= $color_class ?>"></span>
+                                            <a class="link-strong" href="/profile/student.php?user_id=<?= (int)$student['user_id'] ?>">
+                                                <?= h($student['fio']) ?>
+                                            </a>
+                                        </td>
+                                        <td class="time-cell">
+                                            <?= h($time) ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endforeach; ?>
                         </tbody>
                     </table>
                 <?php endif; ?>
