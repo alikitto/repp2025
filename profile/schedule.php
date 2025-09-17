@@ -27,6 +27,10 @@ $weekdays_map = [
     5 => 'Пятница', 6 => 'Суббота', 7 => 'Воскресенье'
 ];
 
+// 4. Массив с классами для цветных кружков
+$dot_colors = ['dot-blue', 'dot-purple', 'dot-yellow'];
+$dot_colors_count = count($dot_colors);
+
 // Указываем активный пункт меню для навбара
 $active = 'schedule';
 
@@ -48,12 +52,9 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
             padding-bottom: 4px;
             border-bottom: 1px solid #dee2e6;
         }
-        /* Стили для визуальной группировки */
-        .schedule-table tbody tr.group-style-1 td {
-            background-color: #f8f9fa; /* Фон для первой группы */
-        }
-        .schedule-table tbody tr.group-style-2 td {
-            background-color: #fff; /* Фон для второй группы */
+        /* --- Новые стили для кружков и группировки --- */
+        .schedule-table tbody tr td {
+            background-color: #fff; /* Убираем чередующийся фон, делаем все строки белыми */
         }
         /* Стиль для жирной нижней рамки у последней строки в группе */
         .schedule-table tbody tr.group-last-row td {
@@ -62,6 +63,23 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
         .time-cell {
             font-weight: 500;
         }
+        /* Контейнер для кружка и имени, чтобы они были на одной линии */
+        .student-cell {
+            display: flex;
+            align-items: center;
+            gap: 12px; /* Расстояние между кружком и именем */
+        }
+        /* Базовый стиль для цветного кружка */
+        .color-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0; /* Предотвращает сжатие кружка */
+        }
+        /* Цвета для кружков */
+        .dot-blue { background-color: #0d6efd; }
+        .dot-purple { background-color: #6f42c1; }
+        .dot-yellow { background-color: #ffc107; }
     </style>
 </head>
 <body>
@@ -94,44 +112,38 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
                         <tbody>
                             <?php
                             $last_time = null;
-                            $group_color_idx = 0;
+                            $group_idx = 0; // Индекс для выбора цвета
                             for ($i = 0; $i < $student_count; $i++):
                                 $student = $students_for_this_day[$i];
                                 $next_student = $students_for_this_day[$i + 1] ?? null;
 
                                 $current_time = substr($student['time'], 0, 5);
-
-                                // Определяем стиль фона для группы
+                                
+                                // Если время сменилось, увеличиваем индекс для выбора нового цвета
                                 if ($current_time !== $last_time) {
-                                    $group_color_idx++;
+                                    $group_idx++;
                                 }
-                                $row_class = 'group-style-' . (($group_color_idx % 2) + 1);
+                                
+                                // Выбираем класс цвета по кругу из массива $dot_colors
+                                $color_class = $dot_colors[($group_idx - 1) % $dot_colors_count];
 
-                                // Проверяем, является ли эта запись последней в своей временной группе
-                                $is_last_in_group = false;
+                                // Проверяем, является ли эта запись последней в группе, чтобы добавить бордер
+                                $row_class = '';
                                 if ($next_student === null || $current_time !== substr($next_student['time'], 0, 5)) {
-                                    $is_last_in_group = true;
+                                    $row_class = 'group-last-row';
                                 }
                                 
-                                if ($is_last_in_group) {
-                                    $row_class .= ' group-last-row'; // Добавляем класс для нижней рамки
-                                }
-                                
-                                // Обновляем "предыдущее" время для следующей итерации
                                 $last_time = $current_time;
                             ?>
                                 <tr class="<?= $row_class ?>">
-                                    <td>
+                                    <td class="student-cell">
+                                        <span class="color-dot <?= $color_class ?>"></span>
                                         <a class="link-strong" href="/profile/student.php?user_id=<?= (int)$student['user_id'] ?>">
                                             <?= h($student['fio']) ?>
                                         </a>
                                     </td>
                                     <td class="time-cell">
-                                        <?php
-                                        // --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
-                                        // Теперь просто выводим время для каждой записи
-                                        echo h($current_time);
-                                        ?>
+                                        <?= h($current_time) ?>
                                     </td>
                                 </tr>
                             <?php endfor; ?>
