@@ -12,7 +12,7 @@ body{
 }
 a{color:var(--brand);text-decoration:none}
 a:hover{color:var(--brand-600)}
-.link-strong{color:#b45309}
+.link-strong{color:#0a5fb0}
 .content{max-width:960px;margin:16px auto;padding:0 12px;}
 .noscroll{overflow:hidden}
 
