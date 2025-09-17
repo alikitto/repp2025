@@ -1,4 +1,3 @@
-/* profile/css/style.css — аккуратный UI в твоих цветах */
 :root{
   --bg:#f7f7f9; --card:#fff; --border:#e7e7e7;
   --brand:#0a5fb0; --brand-600:#0a4c80;
@@ -18,96 +17,114 @@ a:hover{color:var(--brand-600)}
 .noscroll{overflow:hidden}
 
 /* Карточки */
-.card{
-  background:var(--card); border-radius:12px; box-shadow:var(--shadow);
-  padding:16px; margin:16px 0;
-}
+.card{background:var(--card);border-radius:12px;box-shadow:var(--shadow);padding:16px;margin:16px 0}
 h2{margin:0 0 12px}
 
 /* Таблицы */
 .table{
-  border-collapse:separate; border-spacing:0; width:100%;
-  background:#fff; border:1px solid var(--border); border-radius:10px; overflow:hidden;
+  border-collapse:separate;border-spacing:0;width:100%;
+  background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;
 }
 .table thead th{
-  background:#eceff3; font-weight:700; padding:12px 16px; text-align:left;
-  border-bottom:1px solid var(--border);
+  background:#e9edf2;font-weight:700;padding:14px 16px;text-align:left;border-bottom:1px solid var(--border);
+  font-size:16px;
 }
-.table tbody td{padding:12px 16px; border-bottom:1px solid var(--border); vertical-align:middle}
+.table tbody td{padding:14px 16px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:16px}
 .table tbody tr:last-child td{border-bottom:none}
 
-/* Сегодня: ширины колонок, разделитель и выравнивание времени */
-.today{ table-layout:fixed; }
-.today thead th:first-child,
-.today tbody td:first-child{
-  width:70%;
-  border-right:1px solid var(--border);          /* вертикальный разделитель */
-}
-.today thead th:nth-child(2),
-.today tbody td:nth-child(2){ width:30%; }
+/* «Кто приходит сегодня» — разделитель и выравнивание времени */
+.today{table-layout:fixed}
+.today thead th:first-child,.today tbody td:first-child{width:60%;border-right:1px solid var(--border)}
+.today thead th:nth-child(2),.today tbody td:nth-child(2){width:40%}
+.today .time-cell{text-align:right;font-weight:700;letter-spacing:.02em;padding-right:20px;font-variant-numeric:tabular-nums}
 
-.today .time-cell{
-  text-align:right;
-  font-weight:700;
-  letter-spacing:.02em;
-  padding-right:20px;                             /* чуть отступа справа */
-  font-variant-numeric: tabular-nums;             /* ровная колонка цифр */
-}
-
-.debtors .debt{color:var(--danger); font-weight:700; text-align:right}
+/* Должники */
+.debtors .debt{color:var(--danger);font-weight:700;text-align:right}
 
 /* Топбар + гамбургер */
 .topbar{
-  position:sticky; top:0; z-index:40;
-  display:flex; align-items:center; gap:12px;
-  background:#fff; border-bottom:1px solid var(--border);
-  padding:10px 12px;
+  position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;
+  background:#fff;border-bottom:1px solid var(--border);padding:10px 12px;
 }
-.brand{font-weight:700; font-size:18px}
+.brand{font-weight:700;font-size:18px}
 .hamburger{
   width:40px;height:40px;border:none;border-radius:8px;background:#f1f5f9;
   display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
 }
-.hamburger span{
-  display:block;width:20px;height:2px;background:#111;margin:2px 0;border-radius:2px;
-}
+.hamburger span{display:block;width:20px;height:2px;background:#111;margin:2px 0;border-radius:2px}
 
 /* Боковое меню */
 .sidemenu{
-  position:fixed; inset:0 auto 0 0; width:280px; background:#fff;
+  position:fixed;inset:0 auto 0 0;width:280px;background:#fff;
   box-shadow:16px 0 40px rgba(0,0,0,.12);
-  transform:translateX(-100%); transition:transform .22s ease;
-  padding:14px; z-index:50;
-  display:flex; flex-direction:column; gap:6px;
+  transform:translateX(-100%);transition:transform .22s ease;
+  padding:14px;z-index:50;display:flex;flex-direction:column;gap:6px;
 }
-.sidemenu.open{ transform:translateX(0) }
-.menu-header{padding:10px 12px; font-weight:700; color:#111}
+.sidemenu.open{transform:translateX(0)}
+.menu-header{padding:10px 12px;font-weight:700;color:#111}
 .sidemenu a{
-  display:flex; align-items:center; gap:10px;
-  padding:10px 12px; border-radius:8px; color:#111;
+  display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;color:#111
 }
-.sidemenu a:hover{ background:#eef5ff; color:var(--brand) }
-.sidemenu .icon{ width:18px; height:18px; display:inline-flex; }
-.sidemenu .icon svg{ width:18px;height:18px; stroke-width:2 }
-.menu-footer{ margin-top:auto; padding:8px 12px }
-.muted{ color:var(--muted) }
-
-/* Затемнение при открытом меню */
-.backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.28); z-index:45; }
+.sidemenu a:hover{background:#eef5ff;color:var(--brand)}
+.sidemenu a.active{background:#e9f2ff;color:var(--brand)}
+.sidemenu .icon{width:18px;height:18px;display:inline-flex}
+.sidemenu .icon svg{width:18px;height:18px;stroke-width:2}
+.menu-footer{margin-top:auto;padding:8px 12px}
+.muted{color:var(--muted)}
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:45}
 
 /* Кнопки */
-.btn{background:var(--brand);color:#fff;border:none;border-radius:8px;padding:10px 14px;cursor:pointer}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--brand);color:#fff;border:none;border-radius:8px;padding:10px 14px;cursor:pointer;
+  text-decoration:none;font-weight:600
+}
 .btn:hover{background:var(--brand-600)}
-.btn-danger{background:var(--danger);color:#fff;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}
+.btn-ic{width:18px;height:18px;stroke:currentColor}
+.btn-ghost{
+  background:#eef5ff;color:var(--brand);
+}
+.btn-ghost:hover{background:#e1efff}
 
-/* Логин */
+/* Формы */
+.form{display:block}
+.form .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:640px){ .form .grid-2{grid-template-columns:1fr} }
+
+.form-group{display:flex;flex-direction:column;gap:6px}
+label{font-weight:700}
+.input, select{
+  width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:10px;font-size:16px;background:#fff
+}
+.w-240{max-width:260px}
+
+/* крупные селекты расписания */
+.select-big{font-size:17px;padding:12px 14px;border-radius:10px}
+.schedule-table tbody td:first-child{border-right:1px solid var(--border)}
+
+/* Модалка успеха */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.32);display:flex;align-items:center;justify-content:center;z-index:60}
+.modal-card{
+  position:relative;background:#fff;border-radius:14px;box-shadow:var(--shadow);padding:20px;max-width:520px;width:92%;
+}
+.modal-icon.success{
+  width:56px;height:56px;border-radius:50%;background:#e8f8ee;color:#12a150;
+  display:flex;align-items:center;justify-content:center;margin-bottom:8px
+}
+.modal-icon.success svg{width:28px;height:28px;stroke:currentColor}
+.modal-card h3{margin:6px 0 4px;font-size:20px}
+.modal-card p{margin:0 0 12px;color:#333}
+.modal-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.link{display:inline-flex;align-items:center;gap:6px;color:var(--brand);text-decoration:none;font-weight:600;margin-left:auto}
+.link-ic{width:18px;height:18px;stroke:currentColor}
+.modal-close{
+  position:absolute;right:10px;top:10px;border:none;background:transparent;cursor:pointer;padding:6px;border-radius:8px
+}
+.modal-close:hover{background:#f1f5f9}
+
+/* Логин (оставил) */
 .login-card{max-width:340px;margin:12vh auto;background:var(--card);padding:24px;border-radius:12px;box-shadow:var(--shadow)}
 .login-card h1{margin:0 0 12px;font-size:20px}
 .login-card label{display:block;margin-top:8px;font-size:13px}
 .login-card input{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px}
 .login-card button{width:100%;margin-top:12px;padding:10px;border:none;border-radius:8px;background:var(--brand);color:#fff;cursor:pointer}
-
-/* Адаптив */
-@media (max-width:640px){
-  .content{padding:0 8px}
-}
