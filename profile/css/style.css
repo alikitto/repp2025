@@ -1,19 +1,99 @@
-/* profile/css/style.css — лёгкий стиль, близко к исходнику */
-:root { --bg:#f7f7f9; --card:#fff; --border:#e7e7e7; --brand:#0a5fb0; --danger:#b00020; }
+/* profile/css/style.css — аккуратный UI в твоих цветах */
+:root{
+  --bg:#f7f7f9; --card:#fff; --border:#e7e7e7;
+  --brand:#0a5fb0; --brand-600:#0a4c80;
+  --danger:#b00020; --muted:#6b7280; --shadow:0 8px 28px rgba(0,0,0,.06);
+}
+
 *{box-sizing:border-box}
-body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:var(--bg);color:#222;}
+html,body{height:100%}
+body{
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  margin:0; background:var(--bg); color:#222;
+}
 a{color:var(--brand);text-decoration:none}
+a:hover{color:var(--brand-600)}
+.link-strong{color:#b45309} /* тёплый оттенок для имён */
 .content{max-width:960px;margin:16px auto;padding:0 12px;}
-table{border-collapse:collapse;width:100%}
-th,td{border:1px solid var(--border);padding:8px}
-th{background:#fafafa;text-align:left}
-.badge{display:inline-block;background:#eee;border-radius:8px;padding:2px 8px;font-size:12px}
+.noscroll{overflow:hidden}
+
+/* Карточки */
+.card{
+  background:var(--card); border-radius:12px; box-shadow:var(--shadow);
+  padding:16px; margin:16px 0;
+}
+h2{margin:0 0 12px}
+
+/* Таблицы */
+.table{border-collapse:separate;border-spacing:0;width:100%; background:#fff; border:1px solid var(--border); border-radius:10px; overflow:hidden}
+.table thead th{
+  background:#eceff3; font-weight:700; padding:12px; text-align:left; border-bottom:1px solid var(--border);
+}
+.table tbody td{padding:12px; border-bottom:1px solid var(--border); vertical-align:middle}
+.table tbody tr:last-child td{border-bottom:none}
+
+.today .time-cell{font-weight:700; text-align:right; letter-spacing:.02em}
+.debtors .debt{color:var(--danger); font-weight:700; text-align:right}
+
+/* Бейджики и ошибки (на всякий) */
+.badge{display:inline-block;background:#eef2f7;border-radius:999px;padding:2px 10px;font-size:12px}
 .error{color:var(--danger);margin-top:8px}
-.login-card{max-width:340px;margin:12vh auto;background:var(--card);padding:24px;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.06)}
+
+/* Топбар + гамбургер */
+.topbar{
+  position:sticky; top:0; z-index:40;
+  display:flex; align-items:center; gap:12px;
+  background:#fff; border-bottom:1px solid var(--border);
+  padding:10px 12px;
+}
+.brand{font-weight:700; font-size:18px}
+.hamburger{
+  width:40px;height:40px;border:none;border-radius:8px;background:#f1f5f9;
+  display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+}
+.hamburger span{
+  display:block;width:20px;height:2px;background:#111;margin:2px 0;border-radius:2px;
+}
+
+/* Боковое меню */
+.sidemenu{
+  position:fixed; inset:0 auto 0 0; width:280px; background:#fff;
+  box-shadow:16px 0 40px rgba(0,0,0,.12);
+  transform:translateX(-100%); transition:transform .22s ease;
+  padding:14px; z-index:50;
+  display:flex; flex-direction:column; gap:6px;
+}
+.sidemenu.open{ transform:translateX(0) }
+.menu-header{padding:10px 12px; font-weight:700; color:#111}
+.sidemenu a{
+  display:flex; align-items:center; gap:10px;
+  padding:10px 12px; border-radius:8px; color:#111;
+}
+.sidemenu a:hover{ background:#eef5ff; color:var(--brand) }
+.sidemenu .icon{ width:18px; height:18px; display:inline-flex; }
+.sidemenu .icon svg{ width:18px;height:18px; stroke-width:2 }
+.menu-footer{ margin-top:auto; padding:8px 12px }
+.muted{ color:var(--muted) }
+
+/* Затемнение фона при открытом меню */
+.backdrop{
+  position:fixed; inset:0; background:rgba(0,0,0,.28); z-index:45;
+}
+
+/* Кнопки (общие) */
+.btn{background:var(--brand);color:#fff;border:none;border-radius:8px;padding:10px 14px;cursor:pointer}
+.btn:hover{background:var(--brand-600)}
+.btn-danger{background:var(--danger);color:#fff;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}
+
+/* Логин-карта (оставляю как было) */
+.login-card{max-width:340px;margin:12vh auto;background:var(--card);padding:24px;border-radius:12px;box-shadow:var(--shadow)}
 .login-card h1{margin:0 0 12px;font-size:20px}
 .login-card label{display:block;margin-top:8px;font-size:13px}
 .login-card input{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px}
 .login-card button{width:100%;margin-top:12px;padding:10px;border:none;border-radius:8px;background:var(--brand);color:#fff;cursor:pointer}
-.btn{background:var(--brand);color:#fff;border:none;border-radius:6px;padding:8px 12px;cursor:pointer}
-.btn-danger{background:var(--danger);color:#fff;border:none;border-radius:6px;padding:8px 12px;cursor:pointer}
-.card{background:var(--card);border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.06);padding:16px;margin:16px 0}
+
+/* Мелкие адаптивные улучшения */
+@media (max-width:640px){
+  .content{padding:0 8px}
+  .table thead th:nth-child(2), .table tbody td:nth-child(2){ width:34% }
+}
