@@ -1,8 +1,13 @@
 <?php
-// /profile/student.php — карточка ученика (адаптив + модалка удаления ученика)
+// /profile/student.php — карточка ученика
+session_start(); // Убедимся, что сессия запущена
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/../db_conn.php';
 require_once __DIR__ . '/../common/csrf.php';
+
+// Проверяем flash-сообщение об успешном обновлении
+$flash_updated = $_SESSION['flash_updated'] ?? null;
+unset($_SESSION['flash_updated']);
 
 function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
@@ -293,6 +298,15 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 <div id="modalSuccess" class="modal" hidden><div class="modal-card success" role="alert"><button class="modal-close" aria-label="Закрыть" style="color:#fff;">✕</button><div class="toast-icon">✔</div><h3 class="toast-title" style="margin:6px 0;"></h3><p class="toast-text" style="opacity:.9;margin:0 0 6px 0;"></p></div></div>
 <div id="modalNotify" class="modal" hidden><div class="modal-card notify" role="alert"><button class="modal-close" aria-label="Закрыть" style="color:#fff;">✕</button><div class="toast-icon">🗑️</div><h3 class="toast-title" style="margin:6px 0;"></h3><p class="toast-text" style="opacity:.9;margin:0 0 6px 0;"></p></div></div>
 <div id="modalDeleteStudent" class="modal" hidden><div class="modal-card"><button class="modal-close" aria-label="Закрыть">✕</button><h3>Удалить ученика?</h3><p class="muted">Это действие необратимо. Будут удалены все данные об ученике.</p><p class="muted" style="margin-top:10px;">Для подтверждения, введите <b>22</b> в поле ниже:</p><form class="form" onsubmit="return false;"><input type="text" id="delete_confirm_answer" class="input" autocomplete="off"><div class="actions"><button type="button" id="deleteStudentConfirmBtn" class="btn danger sm">Удалить навсегда</button><button type="button" class="btn gray sm modal-close">Отмена</button></div></form></div></div>
+<div id="modalUpdateSuccess" class="modal" <?= !$flash_updated ? 'hidden' : '' ?>>
+    <div class="modal-card success" role="alert">
+        <button class="modal-close" aria-label="Закрыть" style="color:#fff;">✕</button>
+        <div class="toast-icon">✔</div>
+        <h3 class="toast-title" style="margin:6px 0;">Данные изменены</h3>
+        <p class="toast-text" style="opacity:.9;margin:0 0 6px 0;">Информация об ученике успешно обновлена.</p>
+    </div>
+</div>
+
 
 <script>
 (function(){
@@ -308,6 +322,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     success: document.getElementById('modalSuccess'),
     notify: document.getElementById('modalNotify'),
     deleteStudent: document.getElementById('modalDeleteStudent'),
+    updateSuccess: document.getElementById('modalUpdateSuccess'),
   };
 
   function showModal(m){ if(m) m.removeAttribute('hidden'); }
@@ -358,7 +373,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
   });
   
   // Edit/Delete Student button handlers
-  document.getElementById('btnEditStudent')?.addEventListener('click', () => location.href = `/profile/student_edit.php?user_id=${uid}`);
+  document.getElementById('btnEditStudent')?.addEventListener('click', () => location.href = `/profile/edit_student.php?user_id=${uid}`);
   document.getElementById('btnDeleteStudent')?.addEventListener('click', () => showModal(modals.deleteStudent));
   
   // Add Visit submission
@@ -460,6 +475,16 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
   }
   document.getElementById('load-more-visits')?.addEventListener('click', () => loadMore('visits'));
   document.getElementById('load-more-pays')?.addEventListener('click', () => loadMore('pays'));
+
+  // Logic for the update success modal
+  (function() {
+    const modal = modals.updateSuccess;
+    if (modal && !modal.hasAttribute('hidden')) {
+        const hide = () => hideModal(modal);
+        setTimeout(hide, 2500); // Auto-hide after 2.5 seconds
+        modal.querySelector('.modal-close').addEventListener('click', hide);
+    }
+  })();
 })();
 </script>
 </body>
