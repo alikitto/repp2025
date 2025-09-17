@@ -42,7 +42,6 @@ if (!isset($active)) $active = '';
     </span> Отметить посещения за сегодня
   </a>
 
-  <div class="menu-footer"><a class="muted" href="/profile/index.php">Домой</a></div>
 </nav>
 <div id="menuBackdrop" class="backdrop" hidden></div>
 
