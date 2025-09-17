@@ -8,7 +8,7 @@ $csrf_val = function_exists('csrf_token')
   : (isset($_SESSION['csrf']) ? $_SESSION['csrf'] : ($_SESSION['csrf']=bin2hex(random_bytes(32))));
 
 $days = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'];
-$classes = range(1,11); // 1..11
+$classes = range(5,11); // 1..11
 
 // тайм-слоты 09:00–20:00, шаг 30 мин
 $times = [];
