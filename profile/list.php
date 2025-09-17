@@ -1,5 +1,5 @@
 <?php
-// /profile/list.php  (упрощённая версия — убраны модалки и JS для оплаты/посещений)
+// /profile/list.php  (упрощённая версия — убран столбец "Баланс")
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/../db_conn.php';
 require_once __DIR__ . '/../common/csrf.php';
@@ -131,23 +131,19 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
         <tr>
           <th>Имя</th>
           <th style="width:120px;">Класс</th>
-          <th style="width:120px;">Баланс (ур.)</th>
           <th style="width:200px;text-align:right;">Действия</th>
         </tr>
       </thead>
       <tbody>
         <?php if (!$students): ?>
-          <tr><td colspan="4">Учеников не найдено.</td></tr>
-        <?php else: foreach ($students as $s):
-          $balance = (int)$s['balance_lessons'];
-        ?>
+          <tr><td colspan="3">Учеников не найдено.</td></tr>
+        <?php else: foreach ($students as $s): ?>
           <tr>
             <td>
               <a href="/profile/student.php?user_id=<?= (int)$s['user_id'] ?>"><?= htmlspecialchars($s['fio']) ?></a>
               <div class="muted"><?= htmlspecialchars($s['phone'] ?? '') ?></div>
             </td>
             <td><?= htmlspecialchars($s['klass']) ?></td>
-            <td><?= $balance ?></td>
             <td class="td-actions">
               <!-- Просмотр -->
               <a class="icon-btn" title="Просмотреть карточку" href="/profile/student.php?user_id=<?= (int)$s['user_id'] ?>">
