@@ -1,5 +1,5 @@
 <?php
-// /profile/list.php
+// /profile/list.php  (обновлённая версия — структура и колонки не менял)
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/../db_conn.php';
 require_once __DIR__ . '/../common/csrf.php';
@@ -18,7 +18,7 @@ if ($res) {
     $res->close();
 }
 
-// Основной запрос — берём также stud.money (сумма за пакет)
+// Основной запрос — берём также stud.money (цена за урок)
 $sql = "
 SELECT s.user_id,
        CONCAT(s.lastname,' ',s.name) AS fio,
@@ -75,7 +75,6 @@ $stmt->close();
 
 // CSRF token (если реализовано)
 $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
-
 ?>
 <!doctype html>
 <html lang="ru">
@@ -90,11 +89,19 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     .filter-row .search { flex:1; min-width:160px; }
     .actions-panel { display:flex; gap:8px; align-items:center; justify-content:flex-end; }
     .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:8px; border:1px solid var(--border); background:#fff; cursor:pointer; }
-    .icon-btn:hover { box-shadow:0 6px 18px rgba(0,0,0,.06); }
+    .icon-btn:hover { box-shadow:0 6px 18px rgba(0,0,0,0.06); }
     .icon-btn svg{ width:18px; height:18px; stroke:currentColor; }
     .td-actions { display:flex; gap:8px; justify-content:flex-end; }
     .muted { color:var(--muted); font-size:13px; }
     @media (max-width:720px){ .filter-row{flex-direction:column;align-items:stretch} .td-actions{justify-content:flex-start} }
+    /* Простая модалка */
+    .modal { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.4); z-index:1000; }
+    .modal[hidden]{ display:none; }
+    .modal-card { background:#fff; padding:18px; border-radius:10px; width:420px; max-width:95%; box-shadow:0 10px 30px rgba(0,0,0,0.2); }
+    .modal-close { position:absolute; right:12px; top:8px; border:none; background:transparent; font-size:18px; cursor:pointer; }
+    .form .input, .form input[type="date"], .form input[type="number"], .form input[type="text"]{ width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box; }
+    .btn { padding:8px 12px; border-radius:8px; border:1px solid #bbb; background:#f5f5f5; cursor:pointer; }
+    .btn-ghost{ background:transparent; }
   </style>
 </head>
 <body>
@@ -132,12 +139,13 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
         <tr>
           <th>Имя</th>
           <th style="width:120px;">Класс</th>
-          <th style="width:240px;text-align:right;">Действия</th>
+          <th style="width:120px;">Баланс (ур.)</th>
+          <th style="width:200px;text-align:right;">Действия</th>
         </tr>
       </thead>
       <tbody>
         <?php if (!$students): ?>
-          <tr><td colspan="3">Учеников не найдено.</td></tr>
+          <tr><td colspan="4">Учеников не найдено.</td></tr>
         <?php else: foreach ($students as $s):
           $balance = (int)$s['balance_lessons'];
         ?>
@@ -147,6 +155,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
               <div class="muted"><?= htmlspecialchars($s['phone'] ?? '') ?></div>
             </td>
             <td><?= htmlspecialchars($s['klass']) ?></td>
+            <td><?= $balance ?></td>
             <td class="td-actions">
               <!-- Просмотр -->
               <a class="icon-btn" title="Просмотреть карточку" href="/profile/student.php?user_id=<?= (int)$s['user_id'] ?>">
@@ -224,7 +233,8 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
       <input type="number" name="lessons" id="pay_lessons" class="input" value="8" min="1" required>
 
       <label style="margin-top:8px;">Сумма (AZN)</label>
-      <input type="text" name="amount" id="pay_amount" class="input">
+      <!-- делаем readonly: сумма всегда считается автоматически -->
+      <input type="text" name="amount" id="pay_amount" class="input" readonly>
 
       <div style="margin-top:12px; display:flex; gap:8px;">
         <button type="button" id="paySubmit" class="btn">Сохранить оплату</button>
@@ -249,8 +259,8 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 <script>
 (function(){
   // Endpoints
-  const visitEndpoint = '/add/dates.php'; // 기존 на сервере делает upsert + redirect
-  const payEndpoint   = '/add/pays.php';  // обновлённый: возвращает JSON при AJAX
+  const visitEndpoint = '/add/dates.php'; // на сервере делает upsert + redirect
+  const payEndpoint   = '/add/pays.php';  // ожидает POST user_id,date,lessons,amount -> возвращает JSON {ok:true}
 
   // Helpers
   function showModal(el){ el.removeAttribute('hidden'); document.body.classList.add('noscroll'); }
@@ -273,7 +283,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
       visitStudentName.textContent = name;
       visitUserId.value = uid;
       visitDate.value = todayISO();
-      visitVisited.checked = false; // по умолчанию не отмечаем (ты просил опцию)
+      visitVisited.checked = false; // по умолчанию не отмечаем
       showModal(modalVisit);
     });
   });
@@ -282,18 +292,14 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
   visitSubmit.addEventListener('click', async ()=>{
     const uid = visitUserId.value;
     const date = visitDate.value;
-    const visited = visitVisited.checked ? '1' : '0';
     const url = visitEndpoint + '?user_id=' + encodeURIComponent(uid);
     const form = new FormData();
     form.append('dataa', date);
     if (visitVisited.checked) form.append('visited', '1');
-    // CSRF (если есть)
     <?php if ($csrfToken): ?> form.append('csrf', '<?= addslashes($csrfToken) ?>'); <?php endif; ?>
 
     try {
-      // note: server currently redirects on success; fetch will see resp.ok
       const resp = await fetch(url, { method:'POST', body:form, credentials:'same-origin' });
-      // Попытаемся распарсить JSON если сервер вернул его, иначе примем любой OK как успех
       let ok = resp.ok;
       if (resp.headers.get('content-type')?.includes('application/json')) {
         const j = await resp.json().catch(()=>null);
@@ -322,22 +328,28 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
   const payAmount = document.getElementById('pay_amount');
   const paySubmit = document.getElementById('paySubmit');
 
+  // Вспомогательная функция для безопасного парсинга числа
+  function parseNum(v){ v = (v||'').toString().replace(',', '.'); const n = parseFloat(v); return isFinite(n) ? n : 0; }
+
   payBtns.forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const uid = btn.getAttribute('data-user_id');
       const name = btn.getAttribute('data-name') || 'Ученик';
-      const price = parseFloat(btn.getAttribute('data-price') || '0');
+      const price = parseNum(btn.getAttribute('data-price') || '0');
       payStudentName.textContent = name;
       payUserId.value = uid;
       payDate.value = todayISO();
       payLessons.value = '8';
 
-      // Подставляем сумму из stud.money (сумма за пакет). Оставляем редактируемой.
-      if (!isNaN(price) && price > 0) {
-        payAmount.value = price.toFixed(2);
-      } else {
-        payAmount.value = '';
-      }
+      // Подставляем сумму = price * lessons (readonly)
+      const lessons = parseInt(payLessons.value || '8', 10) || 8;
+      payAmount.value = (price * lessons).toFixed(2);
+
+      // при изменении lessons пересчитываем сумму
+      payLessons.oninput = () => {
+        const lessonsNow = parseInt(payLessons.value || '0', 10) || 0;
+        payAmount.value = (price * lessonsNow).toFixed(2);
+      };
 
       showModal(modalPay);
     });
@@ -346,14 +358,22 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 
   paySubmit.addEventListener('click', async ()=>{
     const uid = payUserId.value;
-    const date = payDate.value;
+    const date = payDate.value || todayISO();
     const lessons = parseInt(payLessons.value || '8', 10) || 8;
-    const amount = (payAmount.value || '').trim();
+    let amount = payAmount.value || '';
+
+    // если по какой-то причине amount пустая — попытаемся посчитать на клиенте
+    if (amount === '') {
+      // найдём кнопку с data-user_id = uid чтобы взять price
+      const btn = Array.from(payBtns).find(b => b.getAttribute('data-user_id') === uid);
+      const price = btn ? parseNum(btn.getAttribute('data-price') || '0') : 0;
+      amount = (price * lessons).toFixed(2);
+    }
 
     const form = new FormData();
     form.append('user_id', uid);
     form.append('lessons', lessons);
-    if (amount !== '') form.append('amount', amount);
+    form.append('amount', amount);
     form.append('date', date);
     <?php if ($csrfToken): ?> form.append('csrf', '<?= addslashes($csrfToken) ?>'); <?php endif; ?>
 
@@ -362,10 +382,9 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
         method: 'POST',
         body: form,
         credentials: 'same-origin',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' } // важный заголовок для JSON-ответа
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
       });
 
-      // ожидаем JSON { ok: true } при success
       const j = await resp.json().catch(()=>null);
       if (!resp.ok || !j || j.ok !== true) {
         const errMsg = (j && j.error) ? j.error : ('HTTP ' + resp.status);
