@@ -106,7 +106,14 @@ $active = 'attendance';
 
 <div class="content">
   <div class="card">
-    <h2>Отметить посещения — <?= htmlspecialchars($today_date) ?></h2>
+      <?php $months = [
+  1=>'Января',2=>'Февраля',3=>'Марта',4=>'Апреля',5=>'Мая',6=>'Июня',
+  7=>'Июля',8=>'Августа',9=>'Сентября',10=>'Октября',11=>'Ноября',12=>'Декабря'
+];
+$prettyDate = (int)date('j', strtotime($today_date)) . ' ' . ($months[(int)date('n', strtotime($today_date))] ?? '');
+?>
+    <h2>Отметить посещения — <h2>Отметить посещения — <?= htmlspecialchars($prettyDate) ?></h2>
+</h2>
 
     <?php if (!$today): ?>
       <p>Сегодня по расписанию нет учеников.</p>
