@@ -1,13 +1,9 @@
 <?php
 // /profile/list.php
-// Список учеников с панелью действий: просмотр, добавить посещение (modal), добавить оплату (modal), редактировать.
-// Требует: /profile/_auth.php, /../db_conn.php, /../common/csrf.php, /../common/nav.php
-
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/../db_conn.php';
 require_once __DIR__ . '/../common/csrf.php';
 
-// фильтры
 $klass = trim($_GET['klass'] ?? '');
 $q     = trim($_GET['q'] ?? '');
 
@@ -21,14 +17,15 @@ if ($res) {
   $res->close();
 }
 
-// основной запрос: считаем баланс аналогично ранее (COUNT(p.id)*8 - SUM(visited))
+// основной запрос: добавил s.money чтобы узнать цену пакета (сумма за 8 уроков)
 $sql = "
 SELECT s.user_id,
        CONCAT(s.lastname,' ',s.name) AS fio,
        COALESCE(NULLIF(s.klass,''),'—') AS klass,
        COALESCE(COUNT(DISTINCT p.id),0) * 8
          - COALESCE(SUM(CASE WHEN d.visited=1 THEN 1 ELSE 0 END),0) AS balance_lessons,
-       s.phone
+       s.phone,
+       COALESCE(s.money,0) AS money
 FROM stud s
 LEFT JOIN pays p ON p.user_id = s.user_id
 LEFT JOIN dates d ON d.user_id = s.user_id
@@ -44,7 +41,7 @@ if ($klass !== '') {
   $params[] = $klass;
   $types .= 's';
 }
-// поиск по имени/телефону
+// поиск
 if ($q !== '') {
   $where[] = "(s.name LIKE ? OR s.lastname LIKE ? OR CONCAT(s.lastname,' ',s.name) LIKE ? OR s.phone LIKE ?)";
   $like = "%$q%";
@@ -53,14 +50,12 @@ if ($q !== '') {
 }
 
 if ($where) $sql .= " WHERE " . implode(' AND ', $where);
-
-$sql .= " GROUP BY s.user_id, fio, klass, s.phone ORDER BY klass ASC, fio ASC";
+$sql .= " GROUP BY s.user_id, fio, klass, s.phone, s.money ORDER BY klass ASC, fio ASC";
 
 $stmt = $con->prepare($sql);
 if (!$stmt) { die("DB error: " . $con->error); }
 
 if ($params) {
-  // bind params dynamically
   $bind_names = [];
   $bind_names[] = $types;
   for ($i=0;$i<count($params);$i++){
@@ -76,7 +71,6 @@ $result = $stmt->get_result();
 $students = $result->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
-// CSRF token for AJAX posts (if implemented)
 $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 ?>
 <!doctype html>
@@ -87,7 +81,6 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
   <title>Список учеников — Tutor CRM</title>
   <link href="/profile/css/style.css" rel="stylesheet">
   <style>
-    /* локальные стили */
     .filter-row { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
     .filter-row .search { flex:1; min-width:160px; }
     .actions-panel { display:flex; gap:8px; align-items:center; justify-content:flex-end; }
@@ -96,13 +89,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     .icon-btn svg{ width:18px; height:18px; stroke:currentColor; }
     .td-actions { display:flex; gap:8px; justify-content:flex-end; }
     .muted { color:var(--muted); font-size:13px; }
-    /* модалки быстрые */
-    .small-row { display:flex; gap:8px; align-items:center; margin:8px 0; }
-    .form-inline{display:flex;gap:8px;align-items:center}
-    @media (max-width:720px){
-      .filter-row{flex-direction:column;align-items:stretch}
-      .td-actions{justify-content:flex-start}
-    }
+    @media (max-width:720px){ .filter-row{flex-direction:column;align-items:stretch} .td-actions{justify-content:flex-start} }
   </style>
 </head>
 <body>
@@ -119,7 +106,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 
     <div class="filter-row" style="margin-top:12px;">
       <form id="filterForm" method="get" style="display:flex;align-items:center;gap:8px;width:100%;">
-        <!-- По умолчанию показываем надпись "Класс (по умолчанию)" -->
+        <!-- По умолчанию надпись "Класс (по умолчанию)" -->
         <select name="klass" onchange="this.form.submit()" style="padding:10px;border-radius:8px;border:1px solid var(--border);">
           <option value=""><?= htmlspecialchars('Класс (по умолчанию)') ?></option>
           <?php foreach ($classes as $c): ?>
@@ -141,7 +128,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
         <tr>
           <th>Имя</th>
           <th style="width:120px;">Класс</th>
-          <th style="width:200px;text-align:right;">Действия</th>
+          <th style="width:240px;text-align:right;">Действия</th>
         </tr>
       </thead>
       <tbody>
@@ -157,23 +144,31 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
             </td>
             <td><?= htmlspecialchars($s['klass']) ?></td>
             <td class="td-actions">
-              <!-- Посмотреть карточку -->
+              <!-- Просмотреть карточку -->
               <a class="icon-btn" title="Просмотреть карточку" href="/profile/student.php?user_id=<?= (int)$s['user_id'] ?>">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#0a5fb0"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
               </a>
 
-              <!-- Добавить посещение (открывает modal) -->
+              <!-- Добавить посещение -->
               <button class="icon-btn js-add-visit" data-user_id="<?= (int)$s['user_id'] ?>" data-name="<?= htmlspecialchars($s['fio'], ENT_QUOTES) ?>" title="Добавить посещение">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#0a5fb0"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
               </button>
 
-              <!-- Добавить оплату (открывает modal) -->
-              <button class="icon-btn js-add-pay" data-user_id="<?= (int)$s['user_id'] ?>" data-name="<?= htmlspecialchars($s['fio'], ENT_QUOTES) ?>" title="Добавить оплату">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#0a5fb0"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3v4M8 3v4"/></svg>
+              <!-- Добавить оплату (иконка доллар) -->
+              <button class="icon-btn js-add-pay" 
+                      data-user_id="<?= (int)$s['user_id'] ?>" 
+                      data-name="<?= htmlspecialchars($s['fio'], ENT_QUOTES) ?>" 
+                      data-price="<?= (float)$s['money'] ?>" 
+                      title="Добавить оплату">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#0a5fb0">
+                  <path d="M12 1v2"/>
+                  <path d="M12 21v2"/>
+                  <path d="M17 5a5 5 0 00-10 0c0 2.5 2.5 4 5 5 2.5 1 5 2.5 5 5 0 3-3 4-6 4"/>
+                </svg>
               </button>
 
-              <!-- Редактировать -->
-              <a class="icon-btn" title="Редактировать" href="/add/update.php?user_id=<?= (int)$s['user_id'] ?>">
+              <!-- Редактировать — ссылка на /profile/student_edit.php -->
+              <a class="icon-btn" title="Редактировать" href="/profile/student_edit.php?user_id=<?= (int)$s['user_id'] ?>">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#0a5fb0"><path d="M3 21l3-1 11-11 2 2-11 11-1 3z"/><path d="M14 7l3 3"/></svg>
               </a>
 
@@ -193,9 +188,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     <p id="visitStudentName" style="font-weight:700;margin-bottom:8px;"></p>
     <form id="visitForm" class="form">
       <input type="hidden" name="user_id" id="visit_user_id">
-      <?php if ($csrfToken): ?>
-        <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrfToken) ?>">
-      <?php endif; ?>
+      <?php if ($csrfToken): ?><input type="hidden" name="csrf" value="<?= htmlspecialchars($csrfToken) ?>"><?php endif; ?>
       <label>Дата</label>
       <input type="date" name="dataa" id="visit_date" class="input" required>
 
@@ -211,7 +204,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
   </div>
 </div>
 
-<!-- Modal: Add Payment -->
+<!-- Modal: Add Payment (lessons editable, default 8; amount prefilled from stud.money but editable) -->
 <div id="modalPay" class="modal" hidden>
   <div class="modal-card" role="dialog" aria-modal="true">
     <button class="modal-close js-close-pay" aria-label="Закрыть">✕</button>
@@ -219,17 +212,16 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     <p id="payStudentName" style="font-weight:700;margin-bottom:8px;"></p>
     <form id="payForm" class="form">
       <input type="hidden" name="user_id" id="pay_user_id">
-      <?php if ($csrfToken): ?>
-        <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrfToken) ?>">
-      <?php endif; ?>
+      <?php if ($csrfToken): ?><input type="hidden" name="csrf" value="<?= htmlspecialchars($csrfToken) ?>"><?php endif; ?>
+
       <label>Дата оплаты</label>
       <input type="date" name="date" id="pay_date" class="input" required>
 
       <label style="margin-top:8px;">Кол-во уроков (по умолчанию 8)</label>
       <input type="number" name="lessons" id="pay_lessons" class="input" value="8" min="1" required>
 
-      <label style="margin-top:8px;">Сумма (опционально)</label>
-      <input type="text" name="amount" id="pay_amount" class="input" placeholder="AZN">
+      <label style="margin-top:8px;">Сумма (AZN)</label>
+      <input type="text" name="amount" id="pay_amount" class="input">
 
       <div style="margin-top:12px; display:flex; gap:8px;">
         <button type="button" id="paySubmit" class="btn">Сохранить оплату</button>
@@ -253,15 +245,13 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 
 <script>
 (function(){
-  // Endpoints (если нужно — поменяй на свои)
-  const visitEndpoint = '/add/dates.php'; // ожидается GET user_id и POST dataa, visited
-  const payEndpoint   = '/add/pays.php';  // ожидается POST (user_id, lessons, amount, date) — если у тебя другие имена полей, измените ниже
+  const visitEndpoint = '/add/dates.php'; // GET user_id, POST dataa, visited
+  const payEndpoint   = '/add/pays.php';  // POST: user_id, lessons (optional), amount (optional), date
 
-  // helper to open/close modal
   function showModal(el){ el.removeAttribute('hidden'); document.body.classList.add('noscroll'); }
   function hideModal(el){ el.setAttribute('hidden',''); document.body.classList.remove('noscroll'); }
 
-  // VISIT modal
+  // Visit modal
   const visitBtns = document.querySelectorAll('.js-add-visit');
   const modalVisit = document.getElementById('modalVisit');
   const visitStudentName = document.getElementById('visitStudentName');
@@ -283,42 +273,32 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
       showModal(modalVisit);
     });
   });
-
   document.querySelectorAll('.js-close-visit').forEach(b=>b.addEventListener('click', ()=> hideModal(modalVisit)));
 
-  visitSubmit.addEventListener('click', async (e)=>{
-    // собрать данные
+  visitSubmit.addEventListener('click', async ()=>{
     const uid = visitUserId.value;
     const date = visitDate.value;
     const visited = visitVisited.checked ? '1' : '0';
-
-    // формируем POST через fetch. add/dates.php ожидает GET user_id
     const url = visitEndpoint + '?user_id=' + encodeURIComponent(uid);
     const form = new FormData();
     form.append('dataa', date);
-    form.append('visited', visited);
-    <?php if ($csrfToken): ?>
-    form.append('csrf', '<?= addslashes($csrfToken) ?>');
-    <?php endif; ?>
+    if (visitVisited.checked) form.append('visited', '1');
+    <?php if ($csrfToken): ?> form.append('csrf', '<?= addslashes($csrfToken) ?>'); <?php endif; ?>
 
     try {
       const resp = await fetch(url, { method:'POST', body:form, credentials:'same-origin' });
-      const text = await resp.text();
-      // Простой успех-детектор: если вернулся код 200 и не "Ошибка" => считаем успехом.
       if (resp.ok) {
         hideModal(modalVisit);
         showSuccess('Посещение сохранено', 'Посещение успешно добавлено/обновлено.');
-        // Обновим страницу (или можно обновить таблицу динамически)
-        setTimeout(()=> location.reload(), 900);
+        setTimeout(()=> location.reload(), 700);
       } else {
-        throw new Error('Ошибка сохранения');
+        const txt = await resp.text();
+        throw new Error(txt || 'Ошибка сохранения');
       }
-    } catch(err){
-      alert('Ошибка при добавлении посещения: ' + err.message);
-    }
+    } catch(err){ alert('Ошибка при добавлении посещения: ' + err.message); }
   });
 
-  // PAY modal
+  // Pay modal
   const payBtns = document.querySelectorAll('.js-add-pay');
   const modalPay = document.getElementById('modalPay');
   const payStudentName = document.getElementById('payStudentName');
@@ -332,15 +312,24 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     btn.addEventListener('click', ()=>{
       const uid = btn.getAttribute('data-user_id');
       const name = btn.getAttribute('data-name') || 'Ученик';
+      const price = parseFloat(btn.getAttribute('data-price') || '0');
       payStudentName.textContent = name;
       payUserId.value = uid;
       payDate.value = todayISO();
       payLessons.value = '8';
-      payAmount.value = '';
+
+      // автозаполнение суммы из stud.money, но editable
+      if (!isNaN(price) && price > 0) {
+        payAmount.value = price.toFixed(2);
+        payAmount.readOnly = false; // editable, per your request
+      } else {
+        payAmount.value = '';
+        payAmount.readOnly = false;
+      }
+
       showModal(modalPay);
     });
   });
-
   document.querySelectorAll('.js-close-pay').forEach(b=>b.addEventListener('click', ()=> hideModal(modalPay)));
 
   paySubmit.addEventListener('click', async ()=>{
@@ -349,29 +338,24 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     const lessons = payLessons.value || '8';
     const amount = payAmount.value || '';
 
-    // POST to add/pays.php (assumption: it will accept these fields)
     const form = new FormData();
     form.append('user_id', uid);
     form.append('lessons', lessons);
     form.append('amount', amount);
     form.append('date', date);
-    <?php if ($csrfToken): ?>
-    form.append('csrf', '<?= addslashes($csrfToken) ?>');
-    <?php endif; ?>
+    <?php if ($csrfToken): ?> form.append('csrf', '<?= addslashes($csrfToken) ?>'); <?php endif; ?>
 
     try {
       const resp = await fetch(payEndpoint, { method:'POST', body:form, credentials:'same-origin' });
       if (resp.ok) {
         hideModal(modalPay);
         showSuccess('Оплата сохранена', 'Оплата успешно добавлена.');
-        setTimeout(()=> location.reload(), 900);
+        setTimeout(()=> location.reload(), 700);
       } else {
         const txt = await resp.text();
         throw new Error(txt || 'Ошибка при сохранении оплаты');
       }
-    } catch(err){
-      alert('Ошибка при добавлении оплаты: ' + err.message);
-    }
+    } catch(err){ alert('Ошибка при добавлении оплаты: ' + err.message); }
   });
 
   // Success modal
@@ -379,12 +363,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
   const successTitle = document.getElementById('successTitle');
   const successText = document.getElementById('successText');
   const successClose = document.getElementById('successClose');
-
-  function showSuccess(title, text){
-    successTitle.textContent = title;
-    successText.textContent = text;
-    showModal(modalSuccess);
-  }
+  function showSuccess(title, text){ successTitle.textContent = title; successText.textContent = text; showModal(modalSuccess); }
   successClose.addEventListener('click', ()=> hideModal(modalSuccess));
 
 })();
