@@ -95,7 +95,6 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
                             <?php
                             $last_time = null;
                             $group_color_idx = 0;
-                            // Используем цикл for, чтобы иметь возможность "заглянуть" на следующую запись
                             for ($i = 0; $i < $student_count; $i++):
                                 $student = $students_for_this_day[$i];
                                 $next_student = $students_for_this_day[$i + 1] ?? null;
@@ -117,6 +116,9 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
                                 if ($is_last_in_group) {
                                     $row_class .= ' group-last-row'; // Добавляем класс для нижней рамки
                                 }
+                                
+                                // Обновляем "предыдущее" время для следующей итерации
+                                $last_time = $current_time;
                             ?>
                                 <tr class="<?= $row_class ?>">
                                     <td>
@@ -126,12 +128,9 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
                                     </td>
                                     <td class="time-cell">
                                         <?php
-                                        // Показываем время только для первой записи в группе
-                                        if ($current_time !== $last_time) {
-                                            echo h($current_time);
-                                        }
-                                        // Обновляем "предыдущее" время для следующей итерации
-                                        $last_time = $current_time;
+                                        // --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+                                        // Теперь просто выводим время для каждой записи
+                                        echo h($current_time);
                                         ?>
                                     </td>
                                 </tr>
