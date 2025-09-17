@@ -112,8 +112,7 @@ $active = 'attendance';
 ];
 $prettyDate = (int)date('j', strtotime($today_date)) . ' ' . ($months[(int)date('n', strtotime($today_date))] ?? '');
 ?>
-    <h2>Отметить посещения — <h2>Отметить посещения — <?= htmlspecialchars($prettyDate) ?></h2>
-</h2>
+    <h2>Отметить посещения — <?= htmlspecialchars($prettyDate) ?></h2>
 
     <?php if (!$today): ?>
       <p>Сегодня по расписанию нет учеников.</p>
