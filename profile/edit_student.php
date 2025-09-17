@@ -29,6 +29,7 @@ $st->execute();
 $schedule = $st->get_result()->fetch_all(MYSQLI_ASSOC);
 $st->close();
 
+// --- Вспомогательные массивы для формы ---
 $weekdays_map_num = [1 => 'Понедельник', 2 => 'Вторник', 3 => 'Среда', 4 => 'Четверг', 5 => 'Пятница', 6 => 'Суббота', 7 => 'Воскресенье'];
 $days = array_values($weekdays_map_num);
 $classes = range(5, 11);
@@ -90,7 +91,9 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
                 <thead><tr><th>День недели</th><th>Время</th></tr></thead>
                 <tbody>
                 <?php for ($i = 0; $i < 3; $i++):
-                    $current_slot = $schedule[$i] ?? null; // Получаем текущий слот или null
+                    // Получаем текущий слот или null, если его нет
+                    $current_slot = $schedule[$i] ?? null; 
+                    // Преобразуем числовой день недели (1) в текстовый ('Понедельник') для сравнения
                     $current_day = $current_slot ? ($weekdays_map_num[$current_slot['weekday']] ?? '') : '';
                     $current_time = $current_slot ? $current_slot['time'] : '';
                 ?>
