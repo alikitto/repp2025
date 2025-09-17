@@ -1,10 +1,10 @@
 <?php
-// /profile/student.php — карточка ученика (адаптив + удаление в этом же файле)
+// /profile/student.php — карточка ученика (адаптив + модалка удаления ученика)
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/../db_conn.php';
 require_once __DIR__ . '/../common/csrf.php';
 
-/* ---------- AJAX: удаление визитов/оплат в этом же файле ---------- */
+/* ---------- AJAX: удаление визитов/оплат/удаление ученика в этом же файле ---------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if (function_exists('csrf_check')) {
         try { csrf_check(); } catch (Throwable $e) {
@@ -36,6 +36,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $st = $con->prepare("DELETE FROM pays WHERE id=? AND user_id=?");
         $st->bind_param('ii', $id, $uid);
         $ok = $st->execute();
+        echo json_encode(['ok'=>$ok?true:false]);
+        exit;
+    }
+
+    if ($action === 'delete_student') {
+        $csrf_check_answer = $_POST['csrf_check_answer'] ?? '';
+        if ($csrf_check_answer !== '22') { http_response_code(400); echo json_encode(['ok'=>false,'error'=>'wrong_answer']); exit; }
+        $st = $con->prepare("DELETE FROM stud WHERE user_id=?");
+        $st->bind_param('i', $uid);
+        $ok = $st->execute();
+        if ($ok) {
+            // Удаляем все данные
+            $con->prepare("DELETE FROM dates WHERE user_id=?")->execute([$uid]);
+            $con->prepare("DELETE FROM pays WHERE user_id=?")->execute([$uid]);
+        }
         echo json_encode(['ok'=>$ok?true:false]);
         exit;
     }
@@ -182,12 +197,19 @@ function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
         <div class="badge">Посещений: <?= (int)$visits_count ?></div>
         <div class="badge">Оплат: <?= (int)$pays_count ?></div>
       </div>
+    </div>
+  </div>
 
-      <div class="toolbar">
-        <a class="btn gray sm" href="/profile/student_edit.php?user_id=<?= (int)$student['user_id'] ?>">✎ Редактировать</a>
-        <button class="btn primary sm" id="btnAddVisit">+ Посещение</button>
-        <button class="btn pay sm" id="btnAddPay">+ Оплата</button>
-      </div>
+  <!-- Новый блок "Управление" -->
+  <div class="card section">
+    <h3>Управление</h3>
+    <div style="display:flex; gap:12px; margin-bottom:16px;">
+      <button class="btn gray sm" id="btnEditStudent">✎ Редактировать</button>
+      <button class="btn danger sm" id="btnDeleteStudent">❗ Удалить ученика</button>
+    </div>
+    <div style="display:flex; gap:12px;">
+      <button class="btn pay sm" id="btnAddVisit">+ Посещение</button>
+      <button class="btn gray sm" id="btnAddPay">+ Оплата</button>
     </div>
   </div>
 
