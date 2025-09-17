@@ -178,23 +178,33 @@ $active = 'attendance';
             </tr>
           </thead>
 <tbody>
-  <?php foreach ($today as $t): $uid = (int)$t['user_id']; ?>
-    <tr>
-      <td data-label="Время" class="time-cell"><?= htmlspecialchars(substr($t['time'],0,5)) ?></td>
+<?php foreach ($today as $t): $uid = (int)$t['user_id']; ?>
+  <tr>
+    <!-- время -->
+    <td data-label="Время" class="time-cell">
+      <div class="cell-content"><?= htmlspecialchars(substr($t['time'], 0, 5)) ?></div>
+    </td>
 
-      <td data-label="Ученик">
+    <!-- ученик -->
+    <td data-label="Ученик">
+      <div class="cell-content">
         <a class="link-strong" href="/profile/student.php?user_id=<?= $uid ?>"><?= htmlspecialchars($t['fio']) ?></a>
-      </td>
+      </div>
+    </td>
 
-      <td data-label="Посетил" class="col-visited">
+    <!-- чекбокс -->
+    <td data-label="Посетил" class="col-visited">
+      <div class="cell-content">
         <label class="visit-label" title="Отметить посетил">
           <input class="visit-checkbox" type="checkbox" name="visited[<?= $uid ?>]" value="1" aria-label="Посетил <?= htmlspecialchars($t['fio']) ?>">
           <span class="visit-custom"></span>
         </label>
-      </td>
-    </tr>
-  <?php endforeach; ?>
+      </div>
+    </td>
+  </tr>
+<?php endforeach; ?>
 </tbody>
+
 
 
         </table>
