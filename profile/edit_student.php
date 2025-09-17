@@ -91,11 +91,12 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
                 <thead><tr><th>День недели</th><th>Время</th></tr></thead>
                 <tbody>
                 <?php for ($i = 0; $i < 3; $i++):
-                    // Получаем текущий слот или null, если его нет
-                    $current_slot = $schedule[$i] ?? null; 
-                    // Преобразуем числовой день недели (1) в текстовый ('Понедельник') для сравнения
+                    $current_slot = $schedule[$i] ?? null;
                     $current_day = $current_slot ? ($weekdays_map_num[$current_slot['weekday']] ?? '') : '';
-                    $current_time = $current_slot ? $current_slot['time'] : '';
+                    
+                    // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+                    // Обрезаем секунды (12:30:00 -> 12:30), чтобы сравнение работало
+                    $current_time = $current_slot ? substr($current_slot['time'], 0, 5) : '';
                 ?>
                     <tr>
                         <td>
