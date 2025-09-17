@@ -14,8 +14,11 @@ if ($uid <= 0) {
 $name  = trim($_POST['name'] ?? '');
 $klass = trim($_POST['klass'] ?? '');
 $money = (float)($_POST['money'] ?? 0);
-$days  = $_POST['day'] ?? [];  // Расписание приходит как массив
-$times = $_POST['time'] ?? [];
+
+// Расписание приходит как массив, проверяем, что это действительно массив
+$days  = is_array($_POST['day']) ? $_POST['day'] : [];
+$times = is_array($_POST['time']) ? $_POST['time'] : [];
+
 
 if ($name === '') {
     die('Укажите имя');
@@ -34,18 +37,23 @@ try {
     $stmt->execute();
     $stmt->close();
 
-    // 4. Полностью обновляем расписание: сначала удаляем старое, потом вставляем новое
+    // 4. Полностью обновляем расписание: сначала удаляем старое...
     $del_stmt = $con->prepare("DELETE FROM schedule WHERE user_id = ?");
     $del_stmt->bind_param('i', $uid);
     $del_stmt->execute();
     $del_stmt->close();
 
+    // ...затем вставляем новое
     $ins_stmt = $con->prepare("INSERT INTO schedule (user_id, weekday, time) VALUES (?, ?, ?)");
-    for ($i = 0; $i < count($days); $i++) {
+    // Убедимся, что количество дней и времени совпадает
+    $slot_count = min(count($days), count($times)); 
+    for ($i = 0; $i < $slot_count; $i++) {
         $day = $days[$i];
-        $time = $times[$i] ?? '';
+        $time = $times[$i];
         $wd = wd_to_num($day);
-        if ($wd >= 1 && $wd <= 7 && $time !== '') {
+
+        // Сохраняем только если и день, и время были выбраны
+        if ($wd >= 1 && $wd <= 7 && !empty($time)) {
             $ins_stmt->bind_param('iis', $uid, $wd, $time);
             $ins_stmt->execute();
         }
