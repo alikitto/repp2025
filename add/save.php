@@ -4,8 +4,9 @@ require_once __DIR__ . '/../db_conn.php';
 require_once __DIR__ . '/../common/csrf.php';
 csrf_check();
 
-$name  = trim($_POST['name'] ?? '');
-$money = (float)($_POST['money'] ?? 0);
+$name   = trim($_POST['name']  ?? '');
+$klass  = trim($_POST['klass'] ?? ''); // новый класс
+$money  = (float)($_POST['money'] ?? 0);
 
 // расписание
 $day1 = $_POST['day1'] ?? ''; $time1 = $_POST['time1'] ?? '';
@@ -14,7 +15,7 @@ $day3 = $_POST['day3'] ?? ''; $time3 = $_POST['time3'] ?? '';
 
 if ($name === '') { die('Укажите имя'); }
 
-// в схеме есть lastname — пишем пустую строку
+// в схеме есть lastname — кладём пустую строку
 $lastname = '';
 
 function wd_to_num($s){
@@ -24,9 +25,9 @@ function wd_to_num($s){
 
 mysqli_begin_transaction($con);
 try {
-  // stud
-  $stmt = $con->prepare("INSERT INTO stud (name, lastname, money) VALUES (?,?,?)");
-  $stmt->bind_param('ssd', $name, $lastname, $money);
+  // stud: теперь пишем klass
+  $stmt = $con->prepare("INSERT INTO stud (name, lastname, klass, money) VALUES (?,?,?,?)");
+  $stmt->bind_param('sssd', $name, $lastname, $klass, $money);
   $stmt->execute();
   $uid = $stmt->insert_id;
   $stmt->close();
@@ -48,9 +49,8 @@ try {
 
   mysqli_commit($con);
 
-  // ---- FLASH в сессии вместо query-параметров ----
-  $_SESSION['flash_created'] = ['id' => $uid, 'name' => $name];
-
+  // flash -> модалка
+  $_SESSION['flash_created'] = ['id'=>$uid,'name'=>$name];
   header("Location: /add/student.php");
   exit;
 } catch (Throwable $e) {
