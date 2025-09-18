@@ -166,7 +166,7 @@ $prettyDate = (int)date('j', strtotime($today_date)) . ' ' . ($months[(int)date(
 <div id="confirmModal" class="modal" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
     <h3 id="confirmTitle">Подтвердите отсутствие</h3>
-    <p class="confirm-note">Вы подтверждаете, что эти ученики не пришли?</p>
+    <p class="confirm-note">Вы подтверждаете, что данные верны?</p>
     <ul id="absentList" class="absent-list"></ul>
 
     <div class="modal-actions" style="margin-top:12px">
@@ -235,7 +235,7 @@ $prettyDate = (int)date('j', strtotime($today_date)) . ' ' . ($months[(int)date(
     absentList.innerHTML = '';
     if (absents.length === 0) {
       const li = document.createElement('li');
-      li.textContent = 'Отсутствующих нет. Вы уверен(а), что хотите сохранить?';
+      li.textContent = 'Отсутствующих нет. Сохранить?';
       absentList.appendChild(li);
     } else {
       absents.forEach(n=>{
