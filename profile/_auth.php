@@ -1,25 +1,51 @@
 <?php
 declare(strict_types=1);
 
-// стартуем сессию безопасно — только если её ещё нет
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// если пользователь не авторизован — редиректим на страницу логина/индекса,
-// но НЕ редиректим, если уже находимся на странице логина (чтобы избежать петли)
+// --- НОВЫЙ БЛОК АВТО-ЛОГИНА ПО COOKIE ---
+// Проверяем, если пользователь НЕ залогинен, но у него есть cookie "remember_me"
+if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
+    
+    // Подключаем базу данных, это обязательно для проверки токена
+    require_once __DIR__ . '/../db_conn.php';
+
+    list($selector, $validator) = explode(':', $_COOKIE['remember_me'], 2);
+
+    if ($selector && $validator) {
+        // Ищем публичную часть (selector) в базе данных
+        $stmt_auth = $con->prepare(
+            "SELECT id, login, name, remember_token_hashed 
+            FROM users 
+            WHERE remember_token_selector = ? AND remember_token_expires > NOW() 
+            LIMIT 1"
+        );
+        $stmt_auth->bind_param('s', $selector);
+        $stmt_auth->execute();
+        $user = $stmt_auth->get_result()->fetch_assoc();
+        $stmt_auth->close();
+
+        if ($user && password_verify($validator, $user['remember_token_hashed'])) {
+            // Успех! Логиним пользователя, создавая сессию
+            $_SESSION['login'] = $user['login'];
+            $_SESSION['id'] = (int)$user['id'];
+            $_SESSION['name'] = $user['name'] ?: $user['login'];
+        } else {
+            // Если токен неверный или истек, удаляем cookie у пользователя
+            setcookie('remember_me', '', time() - 3600, '/');
+        }
+    }
+}
+// --- КОНЕЦ НОВОГО БЛОКА ---
+
+
+// если пользователь все еще не авторизован (ни через сессию, ни через cookie) — редиректим
 if (empty($_SESSION['login']) && empty($_SESSION['id'])) {
-    // текущий запрошенный URI (например "/index.php" или "/profile/index.php")
     $req = $_SERVER['REQUEST_URI'] ?? '';
+    $noRedirectPaths = ['/index.php', '/login.php', '/auth/login.php'];
 
-    // список путей, на которые НЕ нужно редиректить (локальные страницы логина)
-    $noRedirectPaths = [
-        '/index.php',
-        '/login.php',
-        '/auth/login.php'
-    ];
-
-    // если текущий путь не один из "no redirect", то делаем редирект на /index.php
     $shouldRedirect = true;
     foreach ($noRedirectPaths as $p) {
         if ($p !== '' && stripos($req, $p) !== false) {
