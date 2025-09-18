@@ -44,8 +44,11 @@ if (!isset($active)) $active = '';
 
     <a href="/profile/finance.php" class="<?= $active==='finance'?'active':'' ?>">
     <span class="icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 14v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-    </span> Финансы
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 20V10"/>
+  <path d="M18 20V4"/>
+  <path d="M6 20V16"/>
+</svg>    </span> Финансы
   </a>
 
 
