@@ -1,0 +1,5 @@
+# nixpacks.toml
+
+[phases.setup]
+# Устанавливаем необходимые пакеты: клиент MySQL, утилиту для сжатия и отправки почты
+aptPkgs = ["mysql-client", "curl", "gzip", "mutt"]
