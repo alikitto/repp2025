@@ -165,7 +165,7 @@ $prettyDate = (int)date('j', strtotime($today_date)) . ' ' . ($months[(int)date(
 <!-- Confirm modal: показываем список отсутствующих и спрашиваем "Вы подтверждаете, что эти ученики не пришли?" -->
 <div id="confirmModal" class="modal" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
-    <h3 id="confirmTitle">Подтвердите отсутствие</h3>
+    <h3 id="confirmTitle">Подтвердите</h3>
     <p class="confirm-note">Список отсутсвующих</p>
     <ul id="absentList" class="absent-list"></ul>
 
