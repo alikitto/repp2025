@@ -28,7 +28,7 @@ $deb = $con->query("
     ORDER BY balance_lessons ASC
 ")->fetch_all(MYSQLI_ASSOC);
 
-// 3. НОВИНКА: Получаем общее количество учеников
+// 3. Получаем общее количество учеников
 $student_count_result = $con->query("SELECT COUNT(*) AS total FROM stud");
 $student_count = $student_count_result->fetch_assoc()['total'];
 
@@ -58,15 +58,42 @@ $active = 'home';
         .dot-yellow { background-color: #ffc107; }
         .dot-gray { background-color: #6c757d; }
         
-        /* Стили для нового инфо-блока */
+        /* --- ИЗМЕНЕНИЯ ЗДЕСЬ --- */
         .dashboard-header {
-            padding: 16px;
+            position: relative; /* Нужно для позиционирования псевдо-элемента */
+            color: white; /* Делаем основной цвет текста белым */
+            padding: 24px;
             margin-bottom: 16px;
             border-radius: 12px;
-            background-color: #e9ecef;
-            border: 1px solid #dee2e6;
+            overflow: hidden; /* Скрываем части изображения, выходящие за рамки */
+
+            /* Стили для фонового изображения */
+            background-image: url('https://video.karal.az/ff.jpg');
+            background-size: cover; /* Масштабируем изображение, чтобы оно заполнило блок */
+            background-position: center; /* Центрируем изображение */
         }
-        .dashboard-header p { margin: 0 0 4px 0; }
+        
+        .dashboard-header::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5); /* Полупрозрачная черная подложка */
+            z-index: 1;
+        }
+        
+        .dashboard-header > * {
+            position: relative; /* Размещаем текст поверх подложки */
+            z-index: 2;
+        }
+
+        .dashboard-header p { 
+            margin: 0 0 4px 0; 
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.7); /* Тень для лучшей читаемости */
+        }
+        .dashboard-header a {
+            color: #fff; /* Делаем ссылку белой */
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -74,10 +101,9 @@ $active = 'home';
 <?php require __DIR__ . '/../common/nav.php'; ?>
 
 <div class="content">
-
     <div class="dashboard-header">
         <p><strong>Сегодня, <?= date('d.m.Y') ?></strong></p>
-        <p>Всего учеников: <a href="/profile/list.php" class="link-strong"><?= $student_count ?></a></p>
+        <p>Всего учеников: <a href="/profile/list.php"><?= $student_count ?></a></p>
         <p style="margin-top: 8px;">Хорошей работы! ✨</p>
     </div>
 
