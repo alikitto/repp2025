@@ -1,2 +1,8 @@
 [phases.setup]
-aptPkgs = ["mysql-client", "curl", "gzip", "mutt"]
+aptPkgs = ["default-mysql-client", "curl", "gzip"]
+
+[phases.build]
+cmds = []
+
+[phases.start]
+cmd = "bash backup.sh"
