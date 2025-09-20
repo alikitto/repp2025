@@ -1,0 +1,5 @@
+[phases.setup]
+aptPkgs = ["default-mysql-client", "curl", "gzip"]
+
+[start]
+cmd = "bash scripts/entrypoint.sh"
