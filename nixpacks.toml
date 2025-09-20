@@ -1,8 +1,5 @@
 [phases.setup]
 aptPkgs = ["default-mysql-client", "curl", "gzip"]
 
-[phases.build]
-cmds = []
-
-[phases.start]
-cmd = "bash backup.sh"
+[start]
+cmd = "bash scripts/entrypoint.sh"
