@@ -1,0 +1,12 @@
+.env
+.env.*
+.git
+data/
+*.sql
+!schema.sql
+*.sql.gz
+*.sql.gz.enc
+credentials.json
+token.json
+backups/
+.DS_Store

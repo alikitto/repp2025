@@ -5,126 +5,13 @@ require_once __DIR__ . '/../db_conn.php';
 require_once __DIR__ . '/../common/csrf.php';
 require_once __DIR__ . '/../common/util.php';
 require_once __DIR__ . '/../common/groups.php';
+require_once __DIR__ . '/../common/student_card.php';
 
 // Проверяем flash-сообщение об успешном обновлении
 $flash_updated = $_SESSION['flash_updated'] ?? null;
 unset($_SESSION['flash_updated']);
 $flash_warn = $_SESSION['flash_warn'] ?? '';
 unset($_SESSION['flash_warn']);
-
-function fmt_amount($a){ return number_format((float)$a, 2, '.', ''); }
-function fmt_date($d) {
-    if (empty($d)) return '—';
-    $ts = strtotime($d);
-    return $ts ? date('d.m.Y', $ts) : h($d);
-}
-function trash_svg(): string {
-    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
-}
-function render_visit_row(array $row): string {
-    $date = fmt_date($row['dates']);
-    $tm = hm($row['time'] ?? '');
-    $ok = !empty($row['visited']);
-    $status = $ok ? 'Пришёл' : 'Не пришёл';
-    $label = $date . ($tm !== '' && $tm !== '00:00' ? ' · ' . $tm : '');
-    return '<div class="hist-row"><div class="name">'.h($label).'</div>'
-        .'<span class="chip '.($ok ? 'ok' : 'bad').'">'.$status.'</span>'
-        .'<button class="icon-btn js-del-visit" data-id="'.(int)$row['dates_id'].'" data-date="'.h($label).'" aria-label="Удалить">'.trash_svg().'</button></div>';
-}
-function render_pay_row(array $p, int $flash_id = 0): string {
-    $date = fmt_date($p['date']);
-    $lessons = (int)$p['lessons'];
-    $mic = !empty($p['voice'])
-        ? '<span class="pay-voice" title="Голосом" aria-label="Голосом"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span>'
-        : '';
-    $flash = $flash_id > 0 && (int)$p['id'] === $flash_id ? ' is-flash' : '';
-    return '<div class="hist-row'.$flash.'"><div><div class="name">'.h($date).$mic.'</div><div class="sub">'.$lessons.' ур. · '.fmt_amount($p['amount']).' AZN</div></div>'
-        .'<button class="icon-btn js-del-pay" data-id="'.(int)$p['id'].'" data-date="'.h($date).'" aria-label="Удалить">'.trash_svg().'</button></div>';
-}
-
-function student_card_stats(mysqli $con, int $user_id): array {
-    $st = $con->prepare("SELECT COALESCE(money,0) AS money, pay_mode FROM stud WHERE user_id=?");
-    $st->bind_param('i', $user_id);
-    $st->execute();
-    $stud = $st->get_result()->fetch_assoc();
-    $st->close();
-    $money = (float)($stud['money'] ?? 0);
-    $pm = student_pay_mode($stud['pay_mode'] ?? 'prepaid');
-
-    $st = $con->prepare("SELECT COUNT(*) FROM dates WHERE user_id=? AND visited=1");
-    $st->bind_param('i', $user_id);
-    $st->execute();
-    $st->bind_result($visits_count);
-    $st->fetch();
-    $st->close();
-
-    $st = $con->prepare("SELECT COALESCE(SUM(lessons),0), COUNT(*) FROM pays WHERE user_id=?");
-    $st->bind_param('i', $user_id);
-    $st->execute();
-    $st->bind_result($paid_lessons, $pays_count);
-    $st->fetch();
-    $st->close();
-
-    $st = $con->prepare("SELECT `date`, lessons, amount FROM pays WHERE user_id=? ORDER BY `date` DESC, id DESC LIMIT 1");
-    $st->bind_param('i', $user_id);
-    $st->execute();
-    $last_pay = $st->get_result()->fetch_assoc();
-    $st->close();
-
-    $bal = (int)$paid_lessons - (int)$visits_count;
-    $unit_price = pack_unit_price($money, $last_pay['amount'] ?? null, $last_pay['lessons'] ?? null);
-
-    $period_from = '';
-    $period_visits = (int)$visits_count;
-    $period_missed = 0;
-    if ($bal < 0) {
-        $st = $con->prepare("SELECT `dates` FROM dates WHERE user_id=? AND COALESCE(visited,0)=1 ORDER BY `dates`, dates_id LIMIT 1 OFFSET ?");
-        $paid = (int)$paid_lessons;
-        $st->bind_param('ii', $user_id, $paid);
-        $st->execute();
-        $period_from = (string)($st->get_result()->fetch_assoc()['dates'] ?? '');
-        $st->close();
-        if ($period_from !== '') {
-            $st = $con->prepare("SELECT SUM(COALESCE(visited,0)=1), SUM(COALESCE(visited,0)=0) FROM dates WHERE user_id=? AND `dates`>=?");
-            $st->bind_param('is', $user_id, $period_from);
-            $st->execute();
-            $st->bind_result($period_visits, $period_missed);
-            $st->fetch();
-            $st->close();
-        }
-    } else {
-        $st = $con->prepare("SELECT SUM(COALESCE(visited,0)=0) FROM dates WHERE user_id=?");
-        $st->bind_param('i', $user_id);
-        $st->execute();
-        $st->bind_result($period_missed);
-        $st->fetch();
-        $st->close();
-    }
-
-    $html = '<div class="tone-'.h(balance_tone($bal, $pm)).'">'
-        .'<b>'.($bal > 0 ? '+'.$bal : (string)$bal).'</b>'
-        .'<span>'.($bal < 0 ? 'долг' : 'баланс').'</span>'
-        .($bal < 0 ? '<span class="debt-azn">'.fmt_amount(debt_azn($bal, $unit_price)).' AZN</span>' : '')
-        .'</div>'
-        .'<div><b>'.(int)$visits_count.'</b><span>визиты</span></div>'
-        .'<div><b>'.(int)$paid_lessons.'</b><span>оплачено</span></div>'
-        .'<div><b>'.(int)$pays_count.'</b><span>оплаты</span></div>';
-
-    return [
-        'html' => $html,
-        'parent' => [
-            'debtLessons' => $bal < 0 ? abs($bal) : 0,
-            'debtAzn' => $bal < 0 ? debt_azn($bal, $unit_price) : 0,
-            'remain' => max(0, $bal),
-            'periodFrom' => $period_from !== '' ? fmt_date($period_from) : '',
-            'visits' => (int)$period_visits,
-            'missed' => (int)$period_missed,
-            'lastDate' => $last_pay ? fmt_date($last_pay['date']) : '',
-            'lastLessons' => $last_pay ? (int)$last_pay['lessons'] : 0,
-            'lastAzn' => $last_pay ? (float)$last_pay['amount'] : 0,
-        ],
-    ];
-}
 
 /* ---------- AJAX HANDLER ---------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -280,7 +167,7 @@ $st = $con->prepare("SELECT user_id, lastname, name, klass, COALESCE(money,0) AS
 if (!$student) { render_not_found('Ученик не найден'); }
 
 // Расписание
-$st = $con->prepare("SELECT weekday, `time`, time_end FROM schedule WHERE user_id = ? ORDER BY weekday, `time`"); $st->bind_param('i', $user_id); $st->execute(); $schedule = $st->get_result()->fetch_all(MYSQLI_ASSOC); $st->close();
+$st = $con->prepare("SELECT weekday, `time`, time_end, partial FROM schedule WHERE user_id = ? ORDER BY weekday, `time`"); $st->bind_param('i', $user_id); $st->execute(); $schedule = $st->get_result()->fetch_all(MYSQLI_ASSOC); $st->close();
 $fio = trim(($student['lastname'] ?? '').' '.$student['name']);
 $is_archived = (int)($student['archived'] ?? 0) === 1;
 $weekdays_map = ['1'=>'Понедельник', '2'=>'Вторник', '3'=>'Среда', '4'=>'Четверг', '5'=>'Пятница', '6'=>'Суббота', '7'=>'Воскресенье'];
@@ -290,6 +177,7 @@ $weekdays_short = [1=>'Пн',2=>'Вт',3=>'Ср',4=>'Чт',5=>'Пт',6=>'Сб',7
 $v = in_array($_GET['v'] ?? 'all', ['all','1','0'], true) ? $_GET['v'] : 'all';
 $hist = ($_GET['tab'] ?? '') === 'pays' ? 'pays' : 'visits';
 $flash_pay = (int)($_GET['pay'] ?? 0);
+$flash_visit = (int)($_GET['visit'] ?? 0);
 $sqlVisitsCount = "SELECT COUNT(*) FROM dates WHERE user_id=? ";
 if ($v === '1') { $sqlVisitsCount .= "AND visited=1 "; } elseif ($v === '0') { $sqlVisitsCount .= "AND visited=0 "; }
 $st = $con->prepare($sqlVisitsCount); $st->bind_param('i', $user_id); $st->execute(); $st->bind_result($total_visits); $st->fetch(); $st->close();
@@ -300,35 +188,10 @@ $st = $con->prepare("SELECT `date`, lessons, amount FROM pays WHERE user_id=? OR
 $balance_lessons = (int)$paid_lessons - (int)$visits_count;
 $unit_price = pack_unit_price((float)$student['money'], $last_pay['amount'] ?? null, $last_pay['lessons'] ?? null);
 
-// Отчёт родителю: предоплата — весь баланс; должник — с первого неоплаченного урока
-$period_from = '';
-$period_visits = (int)$visits_count;
+$cycle = parent_report_cycle($con, $user_id, $balance_lessons, (int)$paid_lessons, $last_pay);
+$period_from = $cycle['from'];
+$period_visits = $cycle['visits'];
 $period_missed = 0;
-if ($balance_lessons < 0) {
-    $st = $con->prepare("SELECT `dates` FROM dates WHERE user_id=? AND COALESCE(visited,0)=1 ORDER BY `dates`, dates_id LIMIT 1 OFFSET ?");
-    $paid = (int)$paid_lessons;
-    $st->bind_param('ii', $user_id, $paid);
-    $st->execute();
-    $period_from = (string)($st->get_result()->fetch_assoc()['dates'] ?? '');
-    $st->close();
-    if ($period_from !== '') {
-        $st = $con->prepare("SELECT SUM(COALESCE(visited,0)=1), SUM(COALESCE(visited,0)=0) FROM dates WHERE user_id=? AND `dates`>=?");
-        $st->bind_param('is', $user_id, $period_from);
-        $st->execute();
-        $st->bind_result($period_visits, $period_missed);
-        $st->fetch();
-        $st->close();
-    }
-} else {
-    $st = $con->prepare("SELECT SUM(COALESCE(visited,0)=0) FROM dates WHERE user_id=?");
-    $st->bind_param('i', $user_id);
-    $st->execute();
-    $st->bind_result($period_missed);
-    $st->fetch();
-    $st->close();
-}
-$period_visits = (int)$period_visits;
-$period_missed = (int)$period_missed;
 
 // Данные для таблиц (первые 10 записей)
 $sqlVisits = "SELECT dates_id, user_id, `dates`, `time`, COALESCE(visited,0) AS visited FROM dates WHERE user_id=? ";
@@ -345,7 +208,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title><?= h($student['lastname'].' '.$student['name']) ?> — Карточка ученика</title>
-  <link href="/profile/css/style.css" rel="stylesheet">
+  <link href="<?= asset('/profile/css/style.css') ?>" rel="stylesheet">
 </head>
 <body>
 <?php $active = 'list'; $back = '/profile/list.php'; require __DIR__ . '/../common/nav.php'; ?>
@@ -378,11 +241,26 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
         <?php endif; ?>
       </div>
     </div>
+    <?php
+      $late = prepaid_late_text($pm, $bal);
+      $remain_note = prepaid_remain_text($pm, $bal);
+      $post_note = postpaid_remain_text($pm, current_debt_threshold() - (int)$period_visits, $bal);
+      $note = $late !== '' ? $late : ($remain_note !== '' ? $remain_note : $post_note);
+      $note_kind = $late !== '' ? prepaid_note_kind($pm, $bal) : ($remain_note !== '' ? 'ok' : postpaid_note_kind($pm, current_debt_threshold() - (int)$period_visits, $bal));
+    ?>
+    <p class="notice student-late <?= h($note_kind) ?>" id="studentLate"<?= $note === '' ? ' hidden' : '' ?>>
+      <svg class="ico-warn" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <svg class="ico-ok" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/></svg>
+      <span><?= h($note) ?></span>
+    </p>
     <div class="student-stats">
       <div class="tone-<?= balance_tone($bal, student_pay_mode($student['pay_mode'] ?? 'prepaid')) ?>">
         <b><?= $bal > 0 ? '+'.$bal : $bal ?></b>
         <span><?= $bal < 0 ? 'долг' : 'баланс' ?></span>
-        <?php if ($bal < 0): ?><span class="debt-azn"><?= fmt_amount(debt_azn($bal, $unit_price)) ?> AZN</span><?php endif; ?>
+        <?php if ($bal < 0): ?><span class="debt-azn"><?= fmt_amount(debt_azn($bal, $unit_price)) ?> AZN</span>
+        <?php elseif ($bal > 0): ?><span class="debt-azn"><?= fmt_amount($bal * $unit_price) ?> AZN</span>
+        <?php elseif ($pm === 'prepaid'): ?><span class="debt-azn">пора оплатить</span>
+        <?php elseif ($pm === 'postpaid'): $left = current_debt_threshold() - (int)$period_visits; ?><span class="debt-azn"><?= $left > 0 ? $left.' ур. до оплаты' : 'пора оплатить' ?></span><?php endif; ?>
       </div>
       <div>
         <b><?= (int)$visits_count ?></b>
@@ -405,7 +283,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
       ?>
       <div class="sched-row">
         <span class="sched-day"><?= h($weekdays_short[(int)$item['weekday']] ?? '') ?></span>
-        <time><?= h($start) ?>–<?= h(slot_end($item['time_end'] ?? null, $start)) ?></time>
+        <time><?php if (!empty($item['partial'])): ?><i class="partial-ico" title="Промежуточный"></i> <?php endif; ?><?= h($start) ?>–<?= h(slot_end($item['time_end'] ?? null, $start)) ?></time>
       </div>
       <?php endforeach; ?>
     </div>
@@ -433,7 +311,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
       <div class="hist-list" id="visits-list">
         <?php if (!$visits): ?>
           <p class="muted">Пока нет записей.</p>
-        <?php else: foreach ($visits as $row) echo render_visit_row($row); endif; ?>
+        <?php else: foreach ($visits as $row) echo render_visit_row($row, $flash_visit); endif; ?>
       </div>
       <?php if ($total_visits > 10): ?>
         <div class="load-more-container"><button type="button" class="btn gray sm" id="load-more-visits" data-offset="10">Ещё</button></div>
@@ -456,11 +334,45 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 
 <div id="modalVisit" class="modal" hidden><div class="modal-card"><button class="modal-close" aria-label="Закрыть">✕</button><h3>Добавить посещение</h3><div class="muted" style="margin-bottom:8px;"><?= h($student['lastname'].' '.$student['name']) ?></div><form class="form" data-no-submit="1"><label>Дата</label><input type="date" id="visit_date" class="input" required max="<?= h(date('Y-m-d')) ?>"><div id="visit_slot_wrap" hidden style="margin-top:8px;"><label for="visit_time">Время</label><select id="visit_time" class="input"></select></div><div style="margin-top:8px;"><label><input type="checkbox" id="visit_visited" checked> Пришёл</label></div><div class="actions"><button type="button" class="btn gray sm modal-close">Отмена</button><button type="button" id="visitSubmit" class="btn primary sm">Сохранить</button></div></form></div></div>
 <div id="modalPay" class="modal" hidden><div class="modal-card"><button class="modal-close" aria-label="Закрыть">✕</button><h3>Добавить оплату</h3><div class="muted" style="margin-bottom:8px;"><?= h($student['lastname'].' '.$student['name']) ?></div><form class="form" data-no-submit="1"><label>Дата оплаты</label><input type="date" id="pay_date" class="input" required><p id="pay_dup_warn" class="notice err" hidden style="margin-top:8px">На эту дату уже есть оплата. Можно добавить ещё одну.</p><label style="margin-top:8px;">Кол-во уроков</label><input type="number" id="pay_lessons" class="input" value="<?= (int)current_pack_lessons() ?>" min="1" required><label style="margin-top:8px;">Сумма (AZN)</label><input type="text" id="pay_amount" class="input" readonly><div class="muted">Сумма рассчитывается на сервере.</div><div class="actions"><button type="button" class="btn gray sm modal-close">Отмена</button><button type="button" id="paySubmit" class="btn pay sm">Сохранить</button></div></form></div></div>
-<div id="modalConfirm" class="modal" hidden><div class="modal-card"><h3 id="confirmTitle">Подтверждение</h3><p id="confirmText" class="muted"></p><div class="actions"><button type="button" class="btn gray sm modal-close">Отмена</button><button type="button" id="confirmYes" class="btn danger sm">Удалить</button></div></div></div>
+<div id="modalConfirm" class="modal" hidden><div class="modal-card confirm-card"><div class="confirm-icon danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></div><h3 id="confirmTitle">Подтверждение</h3><p id="confirmText" class="muted"></p><div class="actions"><button type="button" class="btn gray sm modal-close">Отмена</button><button type="button" id="confirmYes" class="btn danger sm">Удалить</button></div></div></div>
 <div id="modalSuccess" class="modal" hidden><div class="modal-card success" role="alert"><button class="modal-close" aria-label="Закрыть" style="color:#fff;">✕</button><div class="toast-icon">✔</div><h3 class="toast-title" style="margin:6px 0;"></h3><p class="toast-text" style="opacity:.9;margin:0 0 6px 0;"></p></div></div>
 <div id="modalNotify" class="modal" hidden><div class="modal-card notify" role="alert"><button class="modal-close" aria-label="Закрыть" style="color:#fff;">✕</button><div class="toast-icon">🗑️</div><h3 class="toast-title" style="margin:6px 0;"></h3><p class="toast-text" style="opacity:.9;margin:0 0 6px 0;"></p></div></div>
-<div id="modalDeleteStudent" class="modal" hidden><div class="modal-card"><button class="modal-close" aria-label="Закрыть">✕</button><h3>Ученик ушёл?</h3><p class="muted">Уйдёт из списка и расписания. Слоты сохранятся — при возврате снова появятся. Оплаты останутся в финансах.</p><p class="muted" style="margin-top:10px;">Введите имя: <b><?= h($fio) ?></b></p><form class="form" data-no-submit="1"><input type="text" id="delete_confirm_answer" class="input" autocomplete="off"><div class="actions"><button type="button" class="btn gray sm modal-close">Отмена</button><button type="button" id="deleteStudentConfirmBtn" class="btn danger sm">Ушёл</button></div></form></div></div>
-<div id="modalRestoreStudent" class="modal" hidden><div class="modal-card"><button class="modal-close" aria-label="Закрыть">✕</button><h3>Вернуть ученика?</h3><p class="muted">Снова появится в списке и расписании.</p><p class="muted" style="margin-top:10px;">Введите имя: <b><?= h($fio) ?></b></p><form class="form" data-no-submit="1"><input type="text" id="restore_confirm_answer" class="input" autocomplete="off"><div class="actions"><button type="button" class="btn gray sm modal-close">Отмена</button><button type="button" id="restoreStudentConfirmBtn" class="btn sm">Вернуть</button></div></form></div></div>
+<div id="modalDeleteStudent" class="modal" hidden>
+  <div class="modal-card confirm-card">
+    <div class="confirm-icon danger">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+    </div>
+    <h3>Ученик ушёл?</h3>
+    <p class="confirm-meta"><?= h($fio) ?></p>
+    <p class="muted">Уйдёт из списка и расписания. Слоты сохранятся — при возврате снова появятся. Оплаты останутся в финансах.</p>
+    <form class="form" data-no-submit="1">
+      <label for="delete_confirm_answer">Введите имя ученика для подтверждения</label>
+      <input type="text" id="delete_confirm_answer" class="input" autocomplete="off">
+      <div class="actions">
+        <button type="button" class="btn gray sm modal-close">Отмена</button>
+        <button type="button" id="deleteStudentConfirmBtn" class="btn danger sm">Ушёл</button>
+      </div>
+    </form>
+  </div>
+</div>
+<div id="modalRestoreStudent" class="modal" hidden>
+  <div class="modal-card confirm-card">
+    <div class="confirm-icon ok">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+    </div>
+    <h3>Вернуть ученика?</h3>
+    <p class="confirm-meta"><?= h($fio) ?></p>
+    <p class="muted">Снова появится в списке и расписании.</p>
+    <form class="form" data-no-submit="1">
+      <label for="restore_confirm_answer">Введите имя ученика для подтверждения</label>
+      <input type="text" id="restore_confirm_answer" class="input" autocomplete="off">
+      <div class="actions">
+        <button type="button" class="btn gray sm modal-close">Отмена</button>
+        <button type="button" id="restoreStudentConfirmBtn" class="btn sm">Вернуть</button>
+      </div>
+    </form>
+  </div>
+</div>
 <div id="modalParentReport" class="modal" hidden>
   <div class="modal-card parent-report-modal">
     <button class="modal-close" aria-label="Закрыть">✕</button>
@@ -473,17 +385,6 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     </div>
   </div>
 </div>
-<div id="modalUpdateSuccess" class="modal" <?= !$flash_updated ? 'hidden' : '' ?>>
-    <div class="modal-card success" role="alert">
-        <button class="modal-close" aria-label="Закрыть" style="color:#fff;">✕</button>
-        <div class="toast-icon">✔</div>
-        <h3 class="toast-title" style="margin:6px 0;">Данные изменены</h3>
-        <p class="toast-text" style="opacity:.9;margin:0 0 6px 0;">Информация об ученике успешно обновлена.</p>
-        <?php if ($flash_warn): ?><p class="notice warn" style="margin:8px 0 0;"><?= h($flash_warn) ?></p><?php endif; ?>
-    </div>
-</div>
-
-
 <script <?= csp_nonce_attr() ?>>
 (function(){
   document.querySelectorAll('form[data-no-submit]').forEach(f => f.addEventListener('submit', e => e.preventDefault()));
@@ -499,6 +400,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
   const parentReport = <?= json_encode([
     'fio' => $fio,
     'klass' => trim((string)$student['klass']),
+    'payMode' => $pm,
     'debtLessons' => $bal < 0 ? abs($bal) : 0,
     'debtAzn' => $bal < 0 ? debt_azn($bal, $unit_price) : 0,
     'remain' => max(0, $bal),
@@ -519,7 +421,6 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     notify: document.getElementById('modalNotify'),
     deleteStudent: document.getElementById('modalDeleteStudent'),
     restoreStudent: document.getElementById('modalRestoreStudent'),
-    updateSuccess: document.getElementById('modalUpdateSuccess'),
     parentReport: document.getElementById('modalParentReport'),
   };
 
@@ -527,6 +428,62 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
   function hideModal(m){ if(m) m.setAttribute('hidden',''); }
   function todayISO(){ return new Date().toISOString().slice(0,10); }
   
+  const fio = <?= json_encode($fio, JSON_UNESCAPED_UNICODE) ?>;
+  function showActionOk(text, url, onDone) {
+    Object.values(modals).forEach(hideModal);
+    if (typeof url === 'function') { onDone = url; url = undefined; }
+    window.showActionOk({ title: text, url, onDone });
+  }
+  function flashHistRow(id, type) {
+    const list = document.getElementById(type === 'pay' ? 'pays-list' : 'visits-list');
+    const sel = type === 'pay' ? '.js-del-pay' : '.js-del-visit';
+    const row = list?.querySelector(sel + '[data-id="' + id + '"]')?.closest('.hist-row');
+    if (!row) return;
+    row.classList.remove('is-flash');
+    void row.offsetWidth;
+    row.classList.add('is-flash');
+  }
+  function switchHist(tab) {
+    document.querySelectorAll('.hist-tabs button').forEach(b => b.classList.toggle('is-active', b.dataset.hist === tab));
+    document.querySelectorAll('.hist-panel').forEach(p => { p.hidden = p.dataset.hist !== tab; });
+  }
+  function applyPayNote(j) {
+    const el = document.getElementById('studentLate');
+    if (!el) return;
+    el.hidden = !j.late;
+    el.classList.toggle('warn', j.late_kind === 'warn');
+    el.classList.toggle('ok', j.late_kind === 'ok');
+    el.classList.toggle('err', j.late_kind === 'err');
+    const t = el.querySelector('span');
+    if (t) t.textContent = j.late || '';
+  }
+  function applyCard(type, j, isoDate) {
+    if (j.html) {
+      const box = document.querySelector('.student-stats');
+      if (box) box.innerHTML = j.html;
+    }
+    applyPayNote(j);
+    if (j.parent) Object.assign(parentReport, j.parent);
+    if (j.row) {
+      const list = document.getElementById(type === 'pay' ? 'pays-list' : 'visits-list');
+      if (list) {
+        list.querySelector('.muted')?.remove();
+        const sel = type === 'pay' ? '.js-del-pay' : '.js-del-visit';
+        const id = String(j.id || '');
+        const html = String(j.row).replace(/\s*is-flash\b/, '');
+        const old = id ? list.querySelector(sel + '[data-id="' + id + '"]') : null;
+        if (old) old.closest('.hist-row').outerHTML = html;
+        else list.insertAdjacentHTML('afterbegin', html);
+      }
+      switchHist(type === 'pay' ? 'pays' : 'visits');
+    }
+    if (type === 'pay' && isoDate) payDates.add(isoDate);
+  }
+  window.applyStudentPay = function(j, userId) {
+    if (Number(userId) !== uid) return false;
+    applyCard('pay', j);
+    return true;
+  };
   function showToast(type, title, text = '', duration = 1200, redirectUrl = null) {
     const modal = (type === 'success') ? modals.success : modals.notify;
     if (!modal) return;
@@ -634,7 +591,8 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
         throw new Error(map[j.error] || j.error || `HTTP ${resp.status}`);
       }
       hideModal(modals.visit);
-      showToast('success', 'Посещение добавлено', '', 1200, location.href);
+      applyCard('visit', j);
+      showActionOk('Успешно добавлено посещение для ученика ' + fio, () => flashHistRow(j.id, 'visit'));
     } catch(e) { alert('Ошибка: ' + e.message); }
   });
 
@@ -650,7 +608,9 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
       const j = await resp.json();
       if (!resp.ok || !j.ok) throw new Error(j.error || `HTTP ${resp.status}`);
       hideModal(modals.pay);
-      showToast('success', 'Оплата добавлена', `Уроков: ${form.get('lessons')}`, 1200, location.href);
+      applyCard('pay', j, modals.pay.querySelector('#pay_date').value);
+      const sum = (modals.pay.querySelector('#pay_amount')?.value || '').replace(/\.00$/, '');
+      showActionOk('Успешно добавлена оплата для ученика ' + fio + ', сумма ' + sum + ' AZN', () => flashHistRow(j.id, 'pay'));
     } catch(e) { alert('Ошибка: ' + e.message); }
   });
 
@@ -666,7 +626,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     form.append('csrf_check_answer', typed);
     try {
       await fetch(location.pathname, { method: 'POST', body: form });
-      showToast('notify', 'Ученик ушёл', 'Оплаты сохранены в финансах.', 1500, '/profile/list.php?tab=left');
+      showActionOk('Успешно отмечен уход ученика ' + fio, '/profile/list.php?tab=left');
     } catch (e) { alert('Ошибка: ' + e.message); }
   });
 
@@ -684,7 +644,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
       const resp = await fetch(location.pathname, { method: 'POST', body: form });
       const j = await resp.json();
       if (!resp.ok || !j.ok) throw new Error(j.error || `HTTP ${resp.status}`);
-      showToast('success', 'Ученик возвращён', '', 1200, location.href);
+      showActionOk('Успешно возвращён ученик ' + fio, location.href);
     } catch (e) { alert('Ошибка: ' + e.message); }
   });
 
@@ -719,9 +679,19 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
         const box = document.querySelector('.student-stats');
         if (box) box.innerHTML = j.html;
       }
+      applyPayNote(j);
       if (j.parent) Object.assign(parentReport, j.parent);
+      const list = document.getElementById(pendingDelete.type === 'pay' ? 'pays-list' : 'visits-list');
+      if (list && !list.querySelector('.hist-row')) {
+        list.innerHTML = pendingDelete.type === 'pay'
+          ? '<p class="muted">Пока оплат нет.</p>'
+          : '<p class="muted">Пока нет записей.</p>';
+      }
       hideModal(modals.confirm);
-      showToast('notify', 'Запись удалена');
+      const text = pendingDelete.type === 'pay'
+        ? 'Успешно удалена оплата для ученика ' + fio
+        : 'Успешно удалено посещение для ученика ' + fio;
+      showActionOk(text);
     } catch(e) { alert('Ошибка удаления: ' + e.message); }
   });
 
@@ -752,6 +722,24 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
   document.getElementById('load-more-pays')?.addEventListener('click', () => loadMore('pays'));
 
   function azn(n){ return Number(n).toFixed(2); }
+  function lessonWord(n) {
+    const n10 = n % 10, n100 = n % 100;
+    if (n10 === 1 && n100 !== 11) return 'урок';
+    if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return 'урока';
+    return 'уроков';
+  }
+  function dayWord(n) {
+    const n10 = n % 10, n100 = n % 100;
+    if (n10 === 1 && n100 !== 11) return 'день';
+    if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return 'дня';
+    return 'дней';
+  }
+  function daysUntilMonthEnd() {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return Math.max(0, Math.round((end - now) / 86400000));
+  }
   function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -763,129 +751,145 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
   }
   function drawParentCard(data) {
     const font = (w, s) => w + ' ' + s + 'px system-ui, -apple-system, Segoe UI, sans-serif';
-    const prepaid = data.debtLessons <= 0;
-    const accent = prepaid ? '#2fbf71' : '#f0a83c';
-    const packTotal = data.visits + data.remain;
-    const packUsed = data.visits;
-    const showBar = prepaid && packTotal > 0;
-
-    const W = 1080, pad = 72;
-    const heroY = data.klass ? 336 : 300;
-    const heroH = showBar ? 268 : 254;
-    const row1Y = heroY + heroH + 86;
-    const row2Y = row1Y + 88;
-    const payY = row2Y + 58;
-    const payH = 200;
-    const H = payY + payH + 76;
+    const postpaid = data.payMode === 'postpaid';
+    const debt = data.debtLessons > 0;
+    const remain = Math.max(0, Number(data.remain) || 0);
+    const dueDays = daysUntilMonthEnd();
+    const accent = debt ? '#b00020' : '#0a5fb0';
+    const ink = '#1a1d21';
+    const mute = '#6b7280';
+    const W = 1080, H = 1040, pad = 64;
 
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
     const ctx = c.getContext('2d');
-    const g = ctx.createLinearGradient(0, 0, W * 0.3, H);
-    g.addColorStop(0, '#0c2238');
-    g.addColorStop(1, '#16324f');
-    ctx.fillStyle = g;
+    ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = accent;
-    ctx.fillRect(0, 0, 14, H);
 
-    const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
-    const now = new Date();
-
-    ctx.letterSpacing = '3px';
-    ctx.fillStyle = accent;
-    ctx.font = font(700, 26);
-    ctx.fillText('ОТЧЁТ ДЛЯ РОДИТЕЛЯ', pad, 88);
-    ctx.letterSpacing = '0px';
-    ctx.fillStyle = '#8aa4b8';
-    ctx.font = font(500, 26);
-    ctx.fillText(now.getDate() + ' ' + months[now.getMonth()] + ' ' + now.getFullYear(), pad, 130);
-
-    ctx.fillStyle = '#fff';
-    ctx.font = font(750, 64);
-    let name = data.fio || '';
-    while (ctx.measureText(name).width > W - 2 * pad && name.length > 4) name = name.slice(0, -2);
-    if (name !== (data.fio || '')) name += '…';
-    ctx.fillText(name, pad, 238);
-    if (data.klass) {
-      ctx.fillStyle = '#bcccdc';
-      ctx.font = font(600, 30);
-      ctx.fillText(data.klass + ' класс', pad, 286);
-    }
-
-    roundRect(ctx, pad, heroY, W - 2 * pad, heroH, 28);
-    ctx.fillStyle = prepaid ? 'rgba(47,191,113,.14)' : 'rgba(240,168,60,.14)';
-    ctx.fill();
-    ctx.strokeStyle = prepaid ? 'rgba(47,191,113,.45)' : 'rgba(240,168,60,.45)';
+    const headH = 320;
+    const hg = ctx.createLinearGradient(0, 0, W, headH);
+    hg.addColorStop(0, debt ? '#9a1024' : '#0a4c80');
+    hg.addColorStop(1, accent);
+    ctx.fillStyle = hg;
+    ctx.fillRect(0, 0, W, headH);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W, headH);
+    ctx.clip();
+    const halo = ctx.createRadialGradient(W - 80, 40, 20, W - 40, 20, 520);
+    halo.addColorStop(0, 'rgba(255,255,255,.16)');
+    halo.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(0, 0, W, headH);
+    ctx.strokeStyle = 'rgba(255,255,255,.14)';
     ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.letterSpacing = '2px';
-    ctx.fillStyle = accent;
-    ctx.font = font(700, 26);
-    ctx.fillText(prepaid ? 'ОПЛАЧЕНО ВПЕРЁД' : 'К ОПЛАТЕ', pad + 36, heroY + 60);
-    ctx.letterSpacing = '0px';
-
-    ctx.fillStyle = '#fff';
-    ctx.font = font(780, 78);
-    const heroValue = prepaid ? (data.remain + ' ур.') : (azn(data.debtAzn) + ' AZN');
-    ctx.fillText(heroValue, pad + 36, heroY + 152);
-
-    ctx.fillStyle = '#bcccdc';
-    ctx.font = font(500, 26);
-    const heroSub = prepaid
-      ? 'оплаченных уроков осталось'
-      : (data.debtLessons + ' ур. × ' + azn(data.price) + ' AZN');
-    ctx.fillText(heroSub, pad + 36, heroY + 198);
-
-    if (showBar) {
-      const barX = pad + 36, barW = W - 2 * pad - 72, barY = heroY + heroH - 48, barH = 16;
-      roundRect(ctx, barX, barY, barW, barH, 8);
-      ctx.fillStyle = 'rgba(255,255,255,.14)';
-      ctx.fill();
-      const done = Math.min(1, packUsed / packTotal);
-      if (done > 0) {
-        roundRect(ctx, barX, barY, Math.max(barH, barW * done), barH, 8);
-        ctx.fillStyle = accent;
+    for (let i = 1; i <= 5; i++) {
+      ctx.beginPath();
+      ctx.arc(W + 40, -30, 140 + i * 95, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,.12)';
+    for (let y = 18; y < headH; y += 32) {
+      for (let x = 18; x < W * 0.55; x += 32) {
+        ctx.beginPath();
+        ctx.arc(x, y, 1.7, 0, Math.PI * 2);
         ctx.fill();
       }
     }
+    ctx.restore();
 
-    [['Проведено уроков', String(data.visits), row1Y], ['Пропуски', String(data.missed), row2Y]].forEach(([label, value, y], i) => {
-      if (i) {
-        ctx.strokeStyle = 'rgba(255,255,255,.09)';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(pad, y - 40); ctx.lineTo(W - pad, y - 40); ctx.stroke();
+    const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+    const now = new Date();
+    const dateStr = now.getDate() + ' ' + months[now.getMonth()] + ' ' + now.getFullYear();
+
+    ctx.fillStyle = 'rgba(255,255,255,.72)';
+    ctx.font = font(650, 22);
+    ctx.fillText('Отчёт родителю', pad, 78);
+    ctx.textAlign = 'right';
+    ctx.fillText(dateStr, W - pad, 78);
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = '#fff';
+    ctx.font = font(750, 68);
+    let name = data.fio || '';
+    while (ctx.measureText(name).width > W - 2 * pad && name.length > 4) name = name.slice(0, -2);
+    if (name !== (data.fio || '')) name += '…';
+    ctx.fillText(name, pad, 188);
+    ctx.fillStyle = 'rgba(255,255,255,.78)';
+    ctx.font = font(500, 28);
+    ctx.fillText(data.klass ? data.klass + ' класс' : 'ученик', pad, 240);
+
+    let label = 'Оплата';
+    let value = 'сейчас';
+    let unit = '';
+    if (debt) {
+      label = 'Долг';
+      value = azn(data.debtAzn);
+      unit = 'AZN';
+    } else if (remain > 0) {
+      label = 'До оплаты';
+      value = String(remain);
+      unit = lessonWord(remain);
+    } else if (postpaid) {
+      label = 'До оплаты';
+      if (dueDays > 0) {
+        value = String(dueDays);
+        unit = dayWord(dueDays);
+      } else {
+        value = 'сегодня';
       }
-      ctx.fillStyle = '#bcccdc';
-      ctx.font = font(600, 30);
-      ctx.fillText(label, pad, y);
-      ctx.fillStyle = '#fff';
-      ctx.font = font(750, 38);
-      ctx.textAlign = 'right';
-      ctx.fillText(value, W - pad, y);
-      ctx.textAlign = 'left';
-    });
+    }
 
-    roundRect(ctx, pad, payY, W - 2 * pad, payH, 24);
-    ctx.fillStyle = 'rgba(255,255,255,.06)';
+    const boxY = 368, boxH = 260;
+    roundRect(ctx, pad, boxY, W - 2 * pad, boxH, 24);
+    ctx.fillStyle = debt ? '#fff4f4' : '#eef5fc';
     ctx.fill();
-    ctx.letterSpacing = '2px';
-    ctx.fillStyle = '#8aa4b8';
+
+    ctx.textAlign = 'center';
+    const mid = W / 2;
+    ctx.fillStyle = accent;
     ctx.font = font(700, 24);
-    ctx.fillText('ПОСЛЕДНЯЯ ОПЛАТА', pad + 36, payY + 56);
-    ctx.letterSpacing = '0px';
-    if (data.lastDate) {
-      ctx.fillStyle = '#fff';
-      ctx.font = font(750, 42);
-      ctx.fillText(data.lastDate, pad + 36, payY + 120);
-      ctx.fillStyle = '#bcccdc';
+    ctx.fillText(label, mid, boxY + 68);
+    ctx.fillStyle = ink;
+    ctx.font = font(780, 86);
+    ctx.fillText(value, mid, boxY + 168);
+    if (unit) {
+      ctx.fillStyle = mute;
       ctx.font = font(600, 28);
-      ctx.fillText(data.lastLessons + ' ур. · ' + azn(data.lastAzn) + ' AZN', pad + 36, payY + 166);
+      ctx.fillText(unit, mid, boxY + 216);
+    }
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = mute;
+    ctx.font = font(500, 26);
+    ctx.fillText('Проведенные уроки', pad, 720);
+    ctx.fillStyle = ink;
+    ctx.font = font(750, 40);
+    ctx.textAlign = 'right';
+    ctx.fillText(String(data.visits), W - pad, 720);
+    ctx.textAlign = 'left';
+
+    roundRect(ctx, pad, 752, W - 2 * pad, 224, 24);
+    ctx.fillStyle = '#f4f5f7';
+    ctx.fill();
+    ctx.fillStyle = mute;
+    ctx.font = font(700, 20);
+    ctx.fillText(postpaid && !debt && remain <= 0 ? 'Долг' : 'Последняя оплата', pad + 40, 812);
+    if (postpaid && !debt && remain <= 0) {
+      ctx.fillStyle = ink;
+      ctx.font = font(650, 36);
+      ctx.fillText('Долга нет', pad + 40, 888);
+    } else if (data.lastDate) {
+      ctx.fillStyle = ink;
+      ctx.font = font(750, 38);
+      ctx.fillText(data.lastDate, pad + 40, 880);
+      ctx.fillStyle = mute;
+      ctx.font = font(500, 26);
+      ctx.fillText(data.lastLessons + ' ' + lessonWord(data.lastLessons) + '  ·  ' + azn(data.lastAzn) + ' AZN', pad + 40, 930);
     } else {
-      ctx.fillStyle = '#bcccdc';
-      ctx.font = font(600, 36);
-      ctx.fillText('Оплат пока нет', pad + 36, payY + 132);
+      ctx.fillStyle = mute;
+      ctx.font = font(500, 30);
+      ctx.fillText('Оплат пока нет', pad + 40, 888);
     }
 
     return c;
@@ -926,15 +930,9 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
     document.getElementById('parentReportSave')?.click();
   });
 
-  // Logic for the update success modal
-  (function() {
-    const modal = modals.updateSuccess;
-    if (modal && !modal.hasAttribute('hidden')) {
-        const hide = () => hideModal(modal);
-        setTimeout(hide, 2500); // Auto-hide after 2.5 seconds
-        modal.querySelector('.modal-close').addEventListener('click', hide);
-    }
-  })();
+  <?php if ($flash_updated): ?>
+  showActionOk('Успешно изменены данные ученика ' + fio);
+  <?php endif; ?>
 })();
 </script>
 </body>

@@ -1,0 +1,5 @@
+Options -Indexes
+RewriteEngine On
+RewriteRule ^(data|scripts|common|\.git)(/|$) - [F,L]
+RewriteRule ^(db_conn\.php|\.env(\..*)?)$ - [F,L]
+RewriteRule \.(sql|env|sh)$ - [F,L]

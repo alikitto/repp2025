@@ -3,6 +3,7 @@ require_once __DIR__ . '/../profile/_auth.php';
 require_once __DIR__ . '/../db_conn.php';
 require_once __DIR__ . '/../common/csrf.php';
 require_once __DIR__ . '/../common/util.php';
+require_once __DIR__ . '/../common/student_card.php';
 csrf_check();
 
 // Получаем POST-данные
@@ -53,7 +54,10 @@ header('Content-Type: application/json');
 if ($ok) {
     $fio = activity_fio($con, $user_id);
     log_activity($con, 'pay', 'Оплата: ' . $fio . ' — ' . $lessons . ' ур., ' . fmt_money((float)$amount) . ' AZN', '/profile/student.php?user_id=' . $user_id);
-    echo json_encode(['ok' => true, 'id' => $pay_id]);
+    $pay = ['id' => $pay_id, 'date' => $date, 'lessons' => $lessons, 'amount' => $amount, 'voice' => $voice];
+    $out = ['ok' => true, 'id' => $pay_id, 'row' => render_pay_row($pay, $pay_id)];
+    $out += student_card_stats($con, $user_id);
+    echo json_encode($out);
 } else {
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'save_failed']);

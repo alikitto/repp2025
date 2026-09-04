@@ -1,55 +1,31 @@
 <?php
-session_start();
+require_once __DIR__ . '/../profile/_auth.php';
 require_once __DIR__ . '/../db_conn.php';
 require_once __DIR__ . '/../common/csrf.php';
 csrf_check();
 
 $name   = trim($_POST['name']  ?? '');
-$klass  = trim($_POST['klass'] ?? ''); // новый класс
+$lastname = trim($_POST['lastname'] ?? '');
+$klass  = trim($_POST['klass'] ?? '');
 $money  = (float)($_POST['money'] ?? 0);
-
-// расписание
-$day1 = $_POST['day1'] ?? ''; $time1 = $_POST['time1'] ?? '';
-$day2 = $_POST['day2'] ?? ''; $time2 = $_POST['time2'] ?? '';
-$day3 = $_POST['day3'] ?? ''; $time3 = $_POST['time3'] ?? '';
+$pay_mode = student_pay_mode($_POST['pay_mode'] ?? 'prepaid');
 
 if ($name === '') { die('Укажите имя'); }
-
-// в схеме есть lastname — кладём пустую строку
-$lastname = '';
-
-function wd_to_num($s){
-  $m = ['Понедельник'=>1,'Вторник'=>2,'Среда'=>3,'Четверг'=>4,'Пятница'=>5,'Суббота'=>6,'Воскресенье'=>7];
-  return $m[$s] ?? 0;
-}
+if ($money <= 0) { die('Укажите цену урока'); }
 
 mysqli_begin_transaction($con);
 try {
-  // stud: теперь пишем klass
-  $stmt = $con->prepare("INSERT INTO stud (name, lastname, klass, money) VALUES (?,?,?,?)");
-  $stmt->bind_param('sssd', $name, $lastname, $klass, $money);
-  $stmt->execute();
-  $uid = $stmt->insert_id;
+  $tid = teacher_id();
+  $stmt = $con->prepare("INSERT INTO stud (name, lastname, klass, money, pay_mode, teacher_id) VALUES (?,?,?,?,?,?)");
+  $stmt->bind_param('sssdsi', $name, $lastname, $klass, $money, $pay_mode, $tid);
+  if (!$stmt->execute()) throw new RuntimeException('stud insert failed');
+  $uid = (int)$stmt->insert_id;
   $stmt->close();
-
-  // schedule
-  $slots = [
-    [wd_to_num($day1), $time1],
-    [wd_to_num($day2), $time2],
-    [wd_to_num($day3), $time3],
-  ];
-  $ins = $con->prepare("INSERT INTO schedule (user_id, weekday, time) VALUES (?,?,?)");
-  foreach ($slots as [$wd,$tm]) {
-    if ($wd>=1 && $wd<=7 && $tm!=='') {
-      $ins->bind_param('iis', $uid, $wd, $tm);
-      $ins->execute();
-    }
-  }
-  $ins->close();
+  if ($uid <= 0) throw new RuntimeException('stud insert_id empty');
 
   mysqli_commit($con);
+  log_activity($con, 'student_add', 'Добавлен ученик ' . trim($lastname . ' ' . $name), '/profile/student.php?user_id=' . $uid);
 
-  // flash -> модалка
   $_SESSION['flash_created'] = ['id'=>$uid,'name'=>$name];
   header("Location: /add/student.php");
   exit;

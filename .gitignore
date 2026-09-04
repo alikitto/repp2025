@@ -1,0 +1,10 @@
+.env
+data/app_secret
+data/pre-restore-*
+.DS_Store
+tutormy.sql
+*.sql.gz
+*.sql.gz.enc
+credentials.json
+token.json
+backups/

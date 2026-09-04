@@ -1,13 +1,64 @@
 <?php
 // login.php — безопасный логин + миграция + "Запомнить меня"
 declare(strict_types=1);
-session_start();
+require_once __DIR__ . '/common/session.php';
+app_session_start();
+require_once __DIR__ . '/common/csrf.php';
+csrf_check();
 require_once __DIR__ . '/db_conn.php';
+
+$ip = client_ip();
+
+if (isset($_POST['totp_cancel'])) {
+    unset($_SESSION['pending_2fa']);
+    header('Location: /index.php');
+    exit;
+}
+
+if (isset($_POST['totp_code'])) {
+    $pending = $_SESSION['pending_2fa'] ?? null;
+    if (!is_array($pending) || (int)($pending['exp'] ?? 0) < time()) {
+        unset($_SESSION['pending_2fa']);
+        header('Location: /index.php?err=3');
+        exit;
+    }
+    $login = (string)($pending['login'] ?? '');
+    if (login_rate_limited($ip, $login)) {
+        header('Location: /index.php?err=4');
+        exit;
+    }
+    $uid = (int)($pending['id'] ?? 0);
+    $st = $con->prepare('SELECT id, login, name, role, totp_secret, totp_enabled FROM users WHERE id=? LIMIT 1');
+    $st->bind_param('i', $uid);
+    $st->execute();
+    $user = $st->get_result()->fetch_assoc();
+    $st->close();
+    if ($user && totp_verify_user($con, $user, (string)$_POST['totp_code'])) {
+        unset($_SESSION['pending_2fa']);
+        session_regenerate_id(true);
+        session_login_user($user);
+        if (!empty($pending['remember'])) {
+            remember_issue($con, (int)$user['id']);
+        }
+        login_rate_clear($ip, $login);
+        $home = (($_SESSION['role'] ?? '') === 'admin') ? '/profile/settings.php' : '/profile/schedule.php';
+        header('Location: ' . $home);
+        exit;
+    }
+    login_rate_hit($ip, $login);
+    header('Location: /index.php?err=2');
+    exit;
+}
 
 $login = $_POST['login'] ?? '';
 $pass  = $_POST['password'] ?? '';
 
-$stmt = $con->prepare("SELECT id, login, password, password_hash, name FROM users WHERE login = ? LIMIT 1");
+if (login_rate_limited($ip, $login)) {
+    header("Location: /index.php?err=4");
+    exit;
+}
+
+$stmt = $con->prepare("SELECT id, login, password_hash, name, role, totp_secret, totp_enabled FROM users WHERE login = ? LIMIT 1");
 $stmt->bind_param('s', $login);
 $stmt->execute();
 $res = $stmt->get_result();
@@ -15,66 +66,36 @@ $user = $res->fetch_assoc();
 $stmt->close();
 
 $ok = false;
-if ($user) {
-    if (!empty($user['password_hash'])) {
-        $ok = password_verify($pass, $user['password_hash']);
-    } elseif (!empty($user['password'])) {
-        if (hash_equals($user['password'], $pass)) {
-            $ok = true;
-            $hash = password_hash($pass, PASSWORD_BCRYPT);
-            $u = $con->prepare("UPDATE users SET password_hash=? WHERE id=?");
-            $u->bind_param('si', $hash, $user['id']);
-            $u->execute();
-            $u->close();
-        }
-    }
+if ($user && !empty($user['password_hash'])) {
+    $ok = password_verify($pass, $user['password_hash']);
 }
 
 if ($ok) {
-    // Устанавливаем стандартные сессии
-    $_SESSION['login'] = $user['login'];
-    $_SESSION['id'] = (int)$user['id'];
-    $_SESSION['name'] = $user['name'] ?: $user['login'];
-
-    // --- НОВЫЙ БЛОК ДЛЯ "ЗАПОМНИТЬ МЕНЯ" ---
-    if (isset($_POST['remember']) && $_POST['remember'] == '1') {
-        // Генерируем токены
-        $selector = bin2hex(random_bytes(16));
-        $validator = bin2hex(random_bytes(32));
-
-        // Устанавливаем cookie на 30 дней
-        setcookie(
-            'remember_me',
-            $selector . ':' . $validator,
-            [
-                'expires' => time() + 86400 * 30, // 86400 секунд = 1 день
-                'path' => '/',
-                'secure' => true, // Отправлять только по HTTPS
-                'httponly' => true, // Защита от доступа через JavaScript
-                'samesite' => 'Lax'
-            ]
-        );
-
-        // Сохраняем токены в базу данных
-        $hashed_validator = password_hash($validator, PASSWORD_DEFAULT);
-        $expires = date('Y-m-d H:i:s', time() + 86400 * 30);
-        $user_id = (int)$user['id'];
-
-        $stmt_update = $con->prepare(
-            "UPDATE users SET 
-                remember_token_selector = ?, 
-                remember_token_hashed = ?, 
-                remember_token_expires = ? 
-            WHERE id = ?"
-        );
-        $stmt_update->bind_param('sssi', $selector, $hashed_validator, $expires, $user_id);
-        $stmt_update->execute();
-        $stmt_update->close();
+    if (totp_user_on($user)) {
+        session_regenerate_id(true);
+        $_SESSION['pending_2fa'] = [
+            'id' => (int)$user['id'],
+            'login' => (string)$user['login'],
+            'remember' => isset($_POST['remember']) && $_POST['remember'] == '1',
+            'exp' => time() + 300,
+        ];
+        unset($_SESSION['csrf']);
+        header('Location: /index.php?step=2fa');
+        exit;
     }
-    // --- КОНЕЦ НОВОГО БЛОКА ---
 
-    header("Location: /profile/index.php");
+    session_regenerate_id(true);
+    session_login_user($user);
+
+    if (isset($_POST['remember']) && $_POST['remember'] == '1') {
+        remember_issue($con, (int)$user['id']);
+    }
+
+    login_rate_clear($ip, $login);
+    $home = (($_SESSION['role'] ?? '') === 'admin') ? '/profile/settings.php' : '/profile/schedule.php';
+    header("Location: " . $home);
     exit;
 }
 
+login_rate_hit($ip, $login);
 header("Location: /index.php?err=1");

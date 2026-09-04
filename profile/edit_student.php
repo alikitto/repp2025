@@ -11,54 +11,40 @@ if ($user_id <= 0) {
 }
 
 // 2. Получаем данные ученика из таблицы stud
-$st = $con->prepare("SELECT name, klass, money FROM stud WHERE user_id = ?");
-$st->bind_param('i', $user_id);
+require_owned_student($con, $user_id);
+$tid = teacher_id();
+$st = $con->prepare("SELECT name, lastname, klass, money, pay_mode FROM stud WHERE user_id = ? AND teacher_id=?");
+$st->bind_param('ii', $user_id, $tid);
 $st->execute();
 $student = $st->get_result()->fetch_assoc();
 $st->close();
 
 if (!$student) {
-    http_response_code(404);
-    die('Ученик не найден.');
+    render_not_found('Ученик не найден');
 }
 
-// 3. Получаем расписание ученика из таблицы schedule
-$st = $con->prepare("SELECT weekday, time FROM schedule WHERE user_id = ? ORDER BY id LIMIT 3");
-$st->bind_param('i', $user_id);
-$st->execute();
-$schedule = $st->get_result()->fetch_all(MYSQLI_ASSOC);
-$st->close();
-
-// --- Вспомогательные массивы для формы ---
-$weekdays_map_num = [1 => 'Понедельник', 2 => 'Вторник', 3 => 'Среда', 4 => 'Четверг', 5 => 'Пятница', 6 => 'Суббота', 7 => 'Воскресенье'];
-$days = array_values($weekdays_map_num);
 $classes = range(5, 11);
-$times = [];
-for ($h = 9; $h <= 20; $h++) {
-    foreach ([0, 30] as $m) {
-        if ($h === 20 && $m > 0) continue;
-        $times[] = sprintf('%02d:%02d', $h, $m);
-    }
-}
 
-function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
+$flash_err = $_SESSION['flash_error'] ?? '';
+unset($_SESSION['flash_error']);
 ?>
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
     <title>Редактировать ученика — Tutor CRM</title>
-    <link rel="stylesheet" href="/profile/css/style.css">
+    <link rel="stylesheet" href="<?= asset('/profile/css/style.css') ?>">
 </head>
 <body>
 
-<?php require __DIR__ . '/../common/nav.php'; ?>
+<?php $active = 'list'; $back = '/profile/student.php?user_id='.$user_id; $back_warn = true; require __DIR__ . '/../common/nav.php'; ?>
 
 <div class="content">
     <div class="card">
         <h2>Редактировать ученика</h2>
         <p class="muted">Вы изменяете данные для: <strong><?= h($student['name']) ?></strong></p>
+        <?php if ($flash_err): ?><p class="notice err"><?= h($flash_err) ?></p><?php endif; ?>
 
         <form action="/profile/update.php" method="post" class="form">
             <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
@@ -69,7 +55,10 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
                     <label for="name">Имя</label>
                     <input class="input" type="text" id="name" name="name" required value="<?= h($student['name']) ?>">
                 </div>
-
+                <div class="form-group">
+                    <label for="lastname">Фамилия</label>
+                    <input class="input" type="text" id="lastname" name="lastname" value="<?= h($student['lastname'] ?? '') ?>">
+                </div>
                 <div class="form-group">
                     <label for="klass">Класс</label>
                     <select id="klass" name="klass" class="input select-big">
@@ -79,46 +68,20 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
                         <?php endforeach; ?>
                     </select>
                 </div>
-
-                <div class="form-group">
-                    <label for="money">Оплата (AZN)</label>
-                    <input class="input" type="number" id="money" name="money" inputmode="decimal" step="0.01" min="0" value="<?= h($student['money']) ?>">
-                </div>
             </div>
-
-            <h3 style="margin:16px 0 8px;">Расписание (до 3 слотов)</h3>
-            <table class="table today schedule-table">
-                <thead><tr><th>День недели</th><th>Время</th></tr></thead>
-                <tbody>
-                <?php for ($i = 0; $i < 3; $i++):
-                    $current_slot = $schedule[$i] ?? null;
-                    $current_day = $current_slot ? ($weekdays_map_num[$current_slot['weekday']] ?? '') : '';
-                    
-                    // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
-                    // Обрезаем секунды (12:30:00 -> 12:30), чтобы сравнение работало
-                    $current_time = $current_slot ? substr($current_slot['time'], 0, 5) : '';
-                ?>
-                    <tr>
-                        <td>
-                            <select class="select-big" name="day[]">
-                                <option value="">— не выбрано —</option>
-                                <?php foreach ($days as $d): ?>
-                                    <option value="<?= h($d) ?>" <?= ($d == $current_day) ? 'selected' : '' ?>><?= h($d) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </td>
-                        <td>
-                            <select class="select-big" name="time[]">
-                                <option value="">— — : — —</option>
-                                <?php foreach ($times as $t): ?>
-                                    <option value="<?= $t ?>" <?= ($t == $current_time) ? 'selected' : '' ?>><?= $t ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </td>
-                    </tr>
-                <?php endfor; ?>
-                </tbody>
-            </table>
+            <div class="form-group">
+                <label for="money">Цена урока (AZN)</label>
+                <input class="input" type="number" id="money" name="money" inputmode="decimal" step="0.01" min="0.01" value="<?= h($student['money']) ?>">
+                <?= price_preset_buttons($con) ?>
+            </div>
+            <div class="form-group">
+                <label for="pay_mode">Как платит</label>
+                <select id="pay_mode" name="pay_mode" class="input select-big">
+                    <?php $pm = student_pay_mode($student['pay_mode'] ?? 'prepaid'); ?>
+                    <option value="prepaid" <?= $pm === 'prepaid' ? 'selected' : '' ?>>Предоплата</option>
+                    <option value="postpaid" <?= $pm === 'postpaid' ? 'selected' : '' ?>>В конце месяца</option>
+                </select>
+            </div>
 
             <button type="submit" class="btn primary" style="margin-top:12px;">
                 Сохранить изменения
@@ -126,5 +89,18 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
         </form>
     </div>
 </div>
+<script <?= csp_nonce_attr() ?>>
+(function(){
+  const money = document.getElementById('money');
+  const presets = document.querySelectorAll('.price-preset');
+  function syncPrice(){
+    const v = parseFloat(money?.value);
+    presets.forEach(p => p.classList.toggle('is-active', parseFloat(p.dataset.price) === v));
+  }
+  presets.forEach(p => p.addEventListener('click', () => { money.value = p.dataset.price; syncPrice(); }));
+  money?.addEventListener('input', syncPrice);
+  syncPrice();
+})();
+</script>
 </body>
 </html>

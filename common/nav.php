@@ -9,7 +9,11 @@ $nav_admin = function_exists('is_admin') && is_admin();
 ?>
 <header class="topbar">
   <button id="menuBtn" class="hamburger" aria-label="Меню" aria-expanded="false" aria-controls="sideMenu">
-    <span></span><span></span><span></span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M4 7h16"/>
+      <path d="M7 12h13"/>
+      <path d="M4 17h16"/>
+    </svg>
   </button>
   <?php if ($back !== ''): ?>
   <a class="back-btn" href="<?= htmlspecialchars($back, ENT_QUOTES, 'UTF-8') ?>"<?= $back_warn ? ' data-warn="1"' : '' ?>>
@@ -18,6 +22,24 @@ $nav_admin = function_exists('is_admin') && is_admin();
   </a>
   <?php endif; ?>
   <div class="brand">Tutor CRM</div>
+  <nav class="top-nav" aria-label="Основное меню">
+    <?php if ($nav_admin): ?>
+    <a href="/profile/users.php" class="<?= $active==='users'?'active':'' ?>">Учителя</a>
+    <?php else: ?>
+    <a href="/profile/schedule.php" class="<?= $active==='schedule'?'active':'' ?>">Расписание</a>
+    <a href="/profile/list.php" class="<?= $active==='list'?'active':'' ?>">Ученики</a>
+    <a href="/add/student.php" class="<?= $active==='add-student'?'active':'' ?>">Добавить</a>
+    <a href="/profile/attendance_today.php" class="<?= $active==='attendance'?'active':'' ?>">Посещения</a>
+    <a href="/profile/finance.php" class="<?= $active==='finance'?'active':'' ?>">Финансы</a>
+    <?php endif; ?>
+    <span class="top-nav-gap" aria-hidden="true"></span>
+    <a href="/profile/profile.php" class="<?= $active==='profile'?'active':'' ?>">Профиль</a>
+    <a href="/profile/settings.php" class="<?= $active==='settings'?'active':'' ?>">Настройки</a>
+    <form method="post" action="/logout.php">
+      <?= csrf_field() ?>
+      <button type="submit" class="linkish">Выйти</button>
+    </form>
+  </nav>
   <?php
     $act_items = [];
     $act_unread = 0;
@@ -69,10 +91,6 @@ $nav_admin = function_exists('is_admin') && is_admin();
     Учителя
   </a>
   <?php else: ?>
-  <a href="/profile/index.php" class="<?= $active==='home'?'active':'' ?>">
-    <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12l9-9 9 9"/><path d="M9 21V9h6v12"/></svg></span>
-    Главная
-  </a>
   <a href="/profile/schedule.php" class="<?= $active==='schedule'?'active':'' ?>">
     <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
     Расписание
@@ -142,17 +160,9 @@ $nav_admin = function_exists('is_admin') && is_admin();
     Профиль
   </a>
   <?php else: ?>
-  <a href="/profile/index.php" class="<?= $tab==='home'?'active':'' ?>">
-    <svg viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M9 21V9h6v12"/></svg>
-    Сегодня
-  </a>
   <a href="/profile/schedule.php" class="<?= $tab==='schedule'?'active':'' ?>">
     <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     Расписание
-  </a>
-  <a href="/profile/attendance_today.php" class="<?= $tab==='attendance'?'active':'' ?>">
-    <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 14v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-    Посещения
   </a>
   <a href="/profile/list.php" class="<?= $tab==='students'?'active':'' ?>">
     <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
@@ -160,12 +170,15 @@ $nav_admin = function_exists('is_admin') && is_admin();
   </a>
   <button type="button" id="voiceBtn" class="voice-nav js-voice-open" aria-label="Голосовая оплата">
     <span class="voice-ic"><svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span>
-    Голос
   </button>
-  <button type="button" id="moreBtn" class="<?= in_array($active, ['finance','add-student','settings','activity','profile'], true)?'active':'' ?>">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-    Ещё
-  </button>
+  <a href="/profile/attendance_today.php" class="<?= $tab==='attendance'?'active':'' ?>">
+    <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 14v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    Посещения
+  </a>
+  <a href="/profile/settings.php" class="<?= $tab==='settings'?'active':'' ?>">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H8a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V8c.2.7.8 1.2 1.5 1.3H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1.1Z"/></svg>
+    Настройки
+  </a>
   <?php endif; ?>
 </nav>
 <?php if (!$nav_admin): ?>
@@ -195,11 +208,87 @@ $nav_admin = function_exists('is_admin') && is_admin();
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
   </div>
   <p class="voice-success-text" id="voiceSuccessText"></p>
+  <p class="voice-success-meta" id="voiceSuccessMeta" hidden></p>
+  <p class="voice-success-date" id="voiceSuccessDate" hidden></p>
 </div>
 <?php endif; ?>
 
 <script <?= csp_nonce_attr() ?>>
 (function(){
+  window.showActionOk = function(text, url, delay){
+    const ok = document.getElementById('voiceSuccess');
+    const msg = document.getElementById('voiceSuccessText');
+    const metaEl = document.getElementById('voiceSuccessMeta');
+    const dateEl = document.getElementById('voiceSuccessDate');
+    let title = text, meta = '', date = '', onDone;
+    if (text && typeof text === 'object') {
+      title = text.title || '';
+      meta = text.meta || '';
+      date = text.date || '';
+      url = text.url ?? url;
+      delay = text.delay ?? delay;
+      onDone = text.onDone;
+    }
+    const go = () => {
+      if (!url) return;
+      const next = new URL(url, location.origin);
+      const here = location.pathname + location.search;
+      if (next.pathname + next.search === here) location.reload();
+      else location.href = next.pathname + next.search;
+    };
+    const finish = () => {
+      if (url) go();
+      else { ok.hidden = true; ok.classList.remove('is-on'); }
+      if (!url && typeof onDone === 'function') onDone();
+    };
+    if (!ok || !msg) { go(); if (!url && typeof onDone === 'function') onDone(); return; }
+    msg.textContent = title;
+    if (metaEl) { metaEl.textContent = meta; metaEl.hidden = !meta; }
+    if (dateEl) { dateEl.textContent = date; dateEl.hidden = !date; }
+    ok.hidden = false;
+    ok.classList.add('is-on');
+    setTimeout(finish, delay || 2600);
+  };
+  window.addEventListener('pageshow', e => { if (e.persisted) location.reload(); });
+  function applyLivePay(j, userId) {
+    if (typeof window.applyStudentPay === 'function' && window.applyStudentPay(j, userId)) return;
+    const bal = Number(j.balance);
+    if (Number.isNaN(bal)) return;
+    const cell = document.querySelector('.js-row[data-id="' + userId + '"] .bal');
+    if (cell) {
+      cell.textContent = bal > 0 ? '+' + bal : String(bal);
+      cell.className = 'bal ' + (j.tone || '');
+    }
+    document.querySelectorAll('[data-pay-alert="' + userId + '"]').forEach(el => {
+      const kind = j.kind || '';
+      el.classList.toggle('is-debt', kind === 'debt');
+      el.classList.toggle('is-warn', kind === 'warn');
+      el.hidden = !kind;
+      el.title = kind === 'debt' ? 'Долг' : (kind === 'warn' ? 'Баланс в минусе' : '');
+      el.setAttribute('aria-hidden', kind ? 'false' : 'true');
+    });
+    const debt = document.querySelector('.table.debt tr[data-id="' + userId + '"]');
+    if (!debt) return;
+    if (!j.kind) {
+      debt.remove();
+      const tb = document.querySelector('.table.debt tbody');
+      if (tb && !tb.rows.length) {
+        const wrap = document.querySelector('.home-debt');
+        if (wrap) {
+          const h = wrap.querySelector('h2');
+          wrap.innerHTML = (h ? h.outerHTML.replace(/<span[^>]*>.*?<\/span>/, '') : '<h2>Должники</h2>') + '<p class="muted">Должников нет</p>';
+        }
+      }
+      return;
+    }
+    debt.className = 'is-' + j.kind;
+    const nums = debt.querySelectorAll('.num');
+    if (nums[0]) nums[0].textContent = '−' + Math.abs(bal);
+    if (nums[1] && j.debt_azn != null) {
+      const s = Number(j.debt_azn);
+      nums[1].textContent = Number.isInteger(s) ? String(s) : s.toFixed(2);
+    }
+  }
   const btn = document.getElementById('menuBtn');
   const more = document.getElementById('moreBtn');
   const menu = document.getElementById('sideMenu');
@@ -235,25 +324,14 @@ $nav_admin = function_exists('is_admin') && is_admin();
     closeNotify();
   });
   const voiceModal = document.getElementById('voiceModal');
-  let voiceSaved = false;
-  let voicePayId = 0;
-  function voiceGoCard(){
-    const id = pendingVoice?.user_id;
-    if (!id) { location.reload(); return; }
-    let url = '/profile/student.php?user_id=' + id + '&tab=pays';
-    if (voicePayId) url += '&pay=' + voicePayId;
-    location.href = url;
-  }
   function hideVoice(){
     if (!voiceModal) return;
-    if (voiceSaved) { voiceGoCard(); return; }
     voiceModal.setAttribute('hidden','');
     document.getElementById('voiceBtn')?.classList.remove('active');
     stopVoice();
   }
   function showVoice(){
     if (!voiceModal) return;
-    if (voiceSaved) { voiceGoCard(); return; }
     closeMenu();
     closeNotify();
     voiceModal.removeAttribute('hidden');
@@ -429,16 +507,17 @@ $nav_admin = function_exists('is_admin') && is_admin();
       const resp = await fetch('/add/pays.php', { method:'POST', body:form, headers:{'X-Requested-With':'XMLHttpRequest'} });
       const j = await resp.json().catch(() => ({}));
       if (!resp.ok || !j.ok) throw new Error();
-      voiceSaved = true;
-      voicePayId = Number(j.id) || 0;
       const m = pendingVoice;
       const x = Number(m.amount);
       const sum = (Number.isInteger(x) ? String(x) : x.toFixed(2)) + ' AZN';
+      applyLivePay(j, m.user_id);
       voiceModal.setAttribute('hidden','');
-      const ok = document.getElementById('voiceSuccess');
-      document.getElementById('voiceSuccessText').textContent = 'Успешно добавлена оплата для ученика ' + m.fio + ', сумма ' + sum;
-      ok.hidden = false;
-      setTimeout(voiceGoCard, 1700);
+      pendingVoice = null;
+      saveBtn.disabled = false;
+      window.showActionOk(
+        'Успешно добавлена оплата для ученика ' + m.fio + ', сумма ' + sum,
+        '/profile/student.php?user_id=' + m.user_id + '&tab=pays&pay=' + j.id
+      );
     } catch (e) {
       hint.textContent = 'Не удалось сохранить';
       saveBtn.disabled = false;

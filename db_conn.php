@@ -19,6 +19,7 @@ if (is_readable($envFile)) {
         [$k, $v] = explode('=', $line, 2);
         $k = trim($k);
         if ($k === '' || getenv($k) !== false) continue;
+        if (in_array($k, ['APP_SECRET', 'TG_BOT_TOKEN', 'TG_CHAT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN', 'GOOGLE_API_KEY'], true)) continue;
         $v = trim($v, " \t\"'");
         putenv($k . '=' . $v);
         $_ENV[$k] = $v;
@@ -57,10 +58,13 @@ require_once __DIR__ . '/common/util.php';
 require_once __DIR__ . '/common/auth.php';
 require_once __DIR__ . '/common/totp.php';
 if (!schema_is_current($con)) {
-    ensure_schedule_time_end($con);
-    ensure_dates_time_schema($con);
+    ensure_settings_table($con);
+    ensure_activity_table($con);
     ensure_remember_tokens($con);
     ensure_roles_schema($con);
+    ensure_schedule_time_end($con);
+    ensure_sched_blocks($con);
+    ensure_dates_time_schema($con);
     ensure_totp_schema($con);
     $phoneCol = $con->query("SHOW COLUMNS FROM stud LIKE 'phone'");
     if ($phoneCol && $phoneCol->num_rows > 0) {

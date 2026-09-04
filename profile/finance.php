@@ -215,7 +215,7 @@ if ($chart) {
 }
 
 $active = 'finance';
-$back = '/profile/index.php';
+$back = '/profile/schedule.php';
 $month_title = $months[(int)substr($from, 5, 2)] . ' ' . substr($from, 0, 4);
 ?>
 <!DOCTYPE html>
@@ -224,7 +224,7 @@ $month_title = $months[(int)substr($from, 5, 2)] . ' ' . substr($from, 0, 4);
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
     <title>Финансы — Tutor CRM</title>
-    <link href="/profile/css/style.css" rel="stylesheet">
+    <link href="<?= asset('/profile/css/style.css') ?>" rel="stylesheet">
 </head>
 <body>
 

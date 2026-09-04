@@ -1,150 +1,132 @@
 <?php
-// /profile/list.php  (упрощённая версия — убран поиск и кнопки фильтра)
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/../db_conn.php';
-require_once __DIR__ . '/../common/csrf.php';
+require_once __DIR__ . '/../common/util.php';
 
-// Параметр фильтра
 $klass = trim($_GET['klass'] ?? '');
+$q = trim($_GET['q'] ?? '');
+$list_tab = ($_GET['tab'] ?? '') === 'left' ? 'left' : 'active';
+$archived = $list_tab === 'left' ? 1 : 0;
 
-// Получаем список классов для фильтра
-$res = $con->query("SELECT DISTINCT COALESCE(NULLIF(klass,''),'') AS klass FROM stud ORDER BY klass");
+$tid = teacher_id();
+$res = $con->prepare("SELECT DISTINCT COALESCE(NULLIF(klass,''),'') AS klass FROM stud WHERE teacher_id=? AND archived=? ORDER BY klass");
+$res->bind_param('ii', $tid, $archived);
+$res->execute();
+$res = $res->get_result();
 $classes = [];
 if ($res) {
     while ($r = $res->fetch_assoc()) {
         if ($r['klass'] !== '') $classes[] = $r['klass'];
     }
-    $res->close();
 }
 
-// Основной запрос — берём также stud.money (цена за урок)
 $sql = "
 SELECT s.user_id,
-       CONCAT(s.lastname,' ',s.name) AS fio,
+       CONCAT(TRIM(s.lastname),' ',s.name) AS fio,
        COALESCE(NULLIF(s.klass,''),'—') AS klass,
-       COALESCE(COUNT(DISTINCT p.id),0) * 8
-         - COALESCE(SUM(CASE WHEN d.visited=1 THEN 1 ELSE 0 END),0) AS balance_lessons,
-       s.phone,
-       COALESCE(s.money,0) AS money
+       s.pay_mode,
+       " . student_balance_expr() . " AS balance_lessons
 FROM stud s
-LEFT JOIN pays p ON p.user_id = s.user_id
-LEFT JOIN dates d ON d.user_id = s.user_id
+" . student_balance_joins() . "
 ";
-
-$where = [];
-$params = [];
-$types = '';
-
-// Фильтр по классу (отправляется автоматически при выборе)
-if ($klass !== '') {
-    $where[] = "s.klass = ?";
-    $params[] = $klass;
-    $types .= 's';
+$where = ['s.teacher_id=?', 's.archived=?'];
+$params = [$tid, $archived];
+$types = 'ii';
+if ($klass !== '') { $where[] = "s.klass = ?"; $params[] = $klass; $types .= 's'; }
+if ($q !== '') {
+    $where[] = "(s.name LIKE ? OR s.lastname LIKE ?)";
+    $like = '%'.$q.'%';
+    array_push($params, $like, $like);
+    $types .= 'ss';
 }
-
 if ($where) $sql .= " WHERE " . implode(' AND ', $where);
-$sql .= " GROUP BY s.user_id, fio, klass, s.phone, s.money ORDER BY klass ASC, fio ASC";
+$sql .= " ORDER BY klass ASC, fio ASC";
 
 $stmt = $con->prepare($sql);
-if (!$stmt) { die("DB error: " . $con->error); }
-
-if ($params) {
-    $bind_names = [];
-    $bind_names[] = $types;
-    for ($i=0;$i<count($params);$i++){
-        $bind_name = 'bind' . $i;
-        $$bind_name = $params[$i];
-        $bind_names[] = &$$bind_name;
-    }
-    call_user_func_array([$stmt, 'bind_param'], $bind_names);
-}
-
+if ($params) $stmt->bind_param($types, ...$params);
 $stmt->execute();
-$result = $stmt->get_result();
-$students = $result->fetch_all(MYSQLI_ASSOC);
+$students = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
-
-// CSRF token (если реализовано)
-$csrfToken = function_exists('csrf_token') ? csrf_token() : '';
+$cnt = $con->prepare("SELECT COUNT(*) AS n FROM stud WHERE teacher_id=? AND archived=?");
+$cnt->bind_param('ii', $tid, $archived);
+$cnt->execute();
+$total_students = (int)$cnt->get_result()->fetch_assoc()['n'];
+$cnt->close();
+$active = 'list';
 ?>
 <!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Список учеников — Tutor CRM</title>
-  <link href="/profile/css/style.css" rel="stylesheet">
-  <style>
-    /* Локальные стили для страницы списка */
-    .filter-row { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
-    .filter-row .select { min-width:200px; padding:10px; border-radius:8px; border:1px solid var(--border); }
-    .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:8px; border:1px solid var(--border); background:#fff; cursor:pointer; }
-    .icon-btn:hover { box-shadow:0 6px 18px rgba(0,0,0,0.06); }
-    .icon-btn svg{ width:18px; height:18px; stroke:currentColor; }
-    .td-actions { display:flex; gap:8px; justify-content:flex-end; }
-    .muted { color:var(--muted); font-size:13px; }
-    @media (max-width:720px){ .filter-row{flex-direction:column;align-items:stretch} .td-actions{justify-content:flex-start} }
-  </style>
+  <link href="<?= asset('/profile/css/style.css') ?>" rel="stylesheet">
 </head>
 <body>
 <?php require __DIR__ . '/../common/nav.php'; ?>
 
 <div class="content">
-  <div class="card">
-    <div style="display:flex;align-items:center;gap:12px;">
-      <h2 style="margin:0;">Список учеников</h2>
-      <div style="margin-left:auto;">
-        <a class="btn" href="/add/student.php">Добавить ученика</a>
+  <div class="card students-card">
+    <div class="toolbar">
+      <div class="students-head">
+        <h1>Ученики</h1>
+        <p class="students-total"><?= $list_tab === 'left' ? 'Ушедшие' : 'Всего' ?>: <?= $total_students ?></p>
       </div>
+      <?php if ($list_tab === 'active'): ?>
+      <a class="btn sm" href="/add/student.php">Добавить</a>
+      <?php endif; ?>
     </div>
 
-    <div class="filter-row" style="margin-top:12px;">
-      <!-- Форма с автосабмитом при выборе класса -->
-      <form id="filterForm" method="get" style="width:100%;">
-        <select name="klass" class="select" onchange="this.form.submit()">
-          <option value=""><?= htmlspecialchars('Выберите класс') ?></option>
-          <?php foreach ($classes as $c): ?>
-            <option value="<?= htmlspecialchars($c) ?>" <?= $c === $klass ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
-          <?php endforeach; ?>
-        </select>
-      </form>
+    <div class="settings-tabs">
+      <a href="/profile/list.php<?= $q !== '' ? '?'.http_build_query(['q'=>$q]) : '' ?>" class="<?= $list_tab==='active'?'active':'' ?>">Активные</a>
+      <a href="/profile/list.php?<?= http_build_query(array_filter(['tab'=>'left','q'=>$q])) ?>" class="<?= $list_tab==='left'?'active':'' ?>">Ушедшие</a>
     </div>
 
-    <table class="table" style="margin-top:12px;">
-      <thead>
-        <tr>
-          <th>Имя</th>
-          <th style="width:120px;">Класс</th>
-          <th style="width:200px;text-align:right;">Действия</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php if (!$students): ?>
-          <tr><td colspan="3">Учеников не найдено.</td></tr>
-        <?php else: foreach ($students as $s): ?>
+    <form method="get" class="toolbar students-tools" id="filterForm">
+      <?php if ($list_tab === 'left'): ?><input type="hidden" name="tab" value="left"><?php endif; ?>
+      <input class="input search" type="search" name="q" id="q" value="<?= h($q) ?>" placeholder="Имя" enterkeyhint="search">
+      <select name="klass" class="select" id="klassFilter">
+        <option value="">Все классы</option>
+        <?php foreach ($classes as $c): ?>
+          <option value="<?= h($c) ?>" <?= $c === $klass ? 'selected' : '' ?>><?= h($c) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </form>
+
+    <?php if (!$students): ?>
+      <p class="muted students-empty"><?= $list_tab === 'left' ? 'Ушедших нет.' : 'Учеников не найдено.' ?></p>
+    <?php else: ?>
+      <table class="table students">
+        <thead>
           <tr>
-            <td>
-              <a href="/profile/student.php?user_id=<?= (int)$s['user_id'] ?>"><?= htmlspecialchars($s['fio']) ?></a>
-              <div class="muted"><?= htmlspecialchars($s['phone'] ?? '') ?></div>
-            </td>
-            <td><?= htmlspecialchars($s['klass']) ?></td>
-            <td class="td-actions">
-              <!-- Просмотр -->
-              <a class="icon-btn" title="Просмотреть карточку" href="/profile/student.php?user_id=<?= (int)$s['user_id'] ?>">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#0a5fb0"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
-              </a>
-
-              <!-- Редактировать (на student_edit.php) -->
-              <a class="icon-btn" title="Редактировать" href="/profile/edit_student.php?user_id=<?= (int)$s['user_id'] ?>">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#0a5fb0"><path d="M3 21l3-1 11-11 2 2-11 11-1 3z"/><path d="M14 7l3 3"/></svg>
-              </a>
-            </td>
+            <th>Имя</th>
+            <th class="num">Класс</th>
+            <th class="num">Баланс</th>
           </tr>
-        <?php endforeach; endif; ?>
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          <?php foreach ($students as $s): $bal = (int)$s['balance_lessons']; ?>
+            <tr class="js-row" data-id="<?= (int)$s['user_id'] ?>" data-q="<?= h(mb_strtolower($s['fio'])) ?>">
+              <td>
+                <a href="/profile/student.php?user_id=<?= (int)$s['user_id'] ?>"><?= h($s['fio']) ?></a>
+              </td>
+              <td class="num"><?= h($s['klass']) ?></td>
+              <td class="num"><span class="bal <?= balance_tone($bal, student_pay_mode($s['pay_mode'] ?? 'prepaid')) ?>"><?= $bal > 0 ? '+'.$bal : $bal ?></span></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    <?php endif; ?>
   </div>
 </div>
-
+<script <?= csp_nonce_attr() ?>>
+document.getElementById('klassFilter')?.addEventListener('change', function(){ this.form.submit(); });
+document.getElementById('q')?.addEventListener('input', function(){
+  const q = this.value.trim().toLowerCase();
+  document.querySelectorAll('.js-row').forEach(el => {
+    el.style.display = !q || (el.dataset.q||'').includes(q) ? '' : 'none';
+  });
+});
+</script>
 </body>
 </html>

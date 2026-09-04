@@ -1,22 +1,21 @@
 <?php
 require_once __DIR__ . '/../profile/_auth.php';
-if (session_status() === PHP_SESSION_NONE) { session_start(); }
-
 require_once __DIR__ . '/../common/csrf.php';
 $csrf_val = function_exists('csrf_token')
   ? csrf_token()
   : (isset($_SESSION['csrf']) ? $_SESSION['csrf'] : ($_SESSION['csrf']=bin2hex(random_bytes(32))));
 
-$days = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'];
-$classes = range(5,11); // 1..11
+$classes = range(5,11);
 
-// тайм-слоты 09:00–20:00, шаг 30 мин
-$times = [];
-for ($h=9; $h<=20; $h++) { foreach ([0,30] as $m) { if ($h===20 && $m>0) continue; $times[] = sprintf('%02d:%02d',$h,$m);} }
+require_once __DIR__ . '/../db_conn.php';
 
 // FLASH из сессии (успех создания)
 $flash = $_SESSION['flash_created'] ?? null;
 unset($_SESSION['flash_created']);
+$flash_err = $_SESSION['flash_error'] ?? '';
+unset($_SESSION['flash_error']);
+$flash_warn = $_SESSION['flash_warn'] ?? '';
+unset($_SESSION['flash_warn']);
 $created   = is_array($flash);
 $createdId = $created ? (int)$flash['id'] : 0;
 $createdNm = $created ? htmlspecialchars($flash['name']) : '';
@@ -25,69 +24,54 @@ $createdNm = $created ? htmlspecialchars($flash['name']) : '';
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Добавить ученика — Tutor CRM</title>
-  <link rel="stylesheet" href="/profile/css/style.css">
+  <link rel="stylesheet" href="<?= asset('/profile/css/style.css') ?>">
 </head>
 <body>
 
-<?php $active='add-student'; require __DIR__ . '/../common/nav.php'; ?>
+<?php $active='add-student'; $back='/profile/list.php'; $back_warn=true; require __DIR__ . '/../common/nav.php'; ?>
 
 <div class="content">
   <div class="card">
     <h2>Добавить ученика</h2>
+    <?php if ($flash_err): ?><p class="notice err"><?= htmlspecialchars($flash_err) ?></p><?php endif; ?>
+    <?php if ($flash_warn): ?><p class="notice warn"><?= htmlspecialchars($flash_warn) ?></p><?php endif; ?>
 
     <form action="/add/save.php" method="post" class="form">
       <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf_val) ?>">
 
-      <div class="grid-3">
+      <div class="grid-2">
         <div class="form-group">
           <label for="name">Имя</label>
           <input class="input" type="text" id="name" name="name" required>
         </div>
-
         <div class="form-group">
-          <label for="klass">Класс</label>
-          <select id="klass" name="klass" class="input select-big">
-            <option value="">— не выбрано —</option>
-            <?php foreach ($classes as $k): ?>
-              <option value="<?= $k ?>"><?= $k ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="money">Оплата (AZN)</label>
-          <input class="input" type="number" id="money" name="money" inputmode="decimal" step="0.01" min="0" value="0">
+          <label for="lastname">Фамилия</label>
+          <input class="input" type="text" id="lastname" name="lastname">
         </div>
       </div>
-
-      <h3 style="margin:16px 0 8px;">Расписание (до 3 слотов)</h3>
-      <table class="table today schedule-table">
-        <thead><tr><th>День недели</th><th>Время</th></tr></thead>
-        <tbody>
-        <?php for ($i=1;$i<=3;$i++): ?>
-          <tr>
-            <td>
-              <select class="select-big" name="day<?= $i ?>">
-                <option value="">— не выбрано —</option>
-                <?php foreach ($days as $d): ?>
-                  <option value="<?= htmlspecialchars($d) ?>"><?= htmlspecialchars($d) ?></option>
-                <?php endforeach; ?>
-              </select>
-            </td>
-            <td>
-              <select class="select-big" name="time<?= $i ?>">
-                <option value="">— — : — —</option>
-                <?php foreach ($times as $t): ?>
-                  <option value="<?= $t ?>"><?= $t ?></option>
-                <?php endforeach; ?>
-              </select>
-            </td>
-          </tr>
-        <?php endfor; ?>
-        </tbody>
-      </table>
+      <div class="form-group">
+        <label for="klass">Класс</label>
+        <select id="klass" name="klass" class="input select-big">
+          <option value="">— не выбрано —</option>
+          <?php foreach ($classes as $k): ?>
+            <option value="<?= $k ?>"><?= $k ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="money">Цена урока (AZN)</label>
+        <input class="input" type="number" id="money" name="money" inputmode="decimal" step="0.01" min="0.01" value="<?= htmlspecialchars(fmt_price(default_lesson_price($con)), ENT_QUOTES, 'UTF-8') ?>">
+        <?= price_preset_buttons($con) ?>
+      </div>
+      <div class="form-group">
+        <label for="pay_mode">Как платит</label>
+        <select id="pay_mode" name="pay_mode" class="input select-big">
+          <option value="prepaid" selected>Предоплата</option>
+          <option value="postpaid">В конце месяца</option>
+        </select>
+      </div>
 
       <button type="submit" class="btn" style="margin-top:12px;">
         <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -97,44 +81,23 @@ $createdNm = $created ? htmlspecialchars($flash['name']) : '';
   </div>
 </div>
 
-<!-- Модалка успеха -->
-<div id="successModal" class="modal" <?php if(!$created) echo 'hidden'; ?>>
-  <div class="modal-card">
-    <div class="modal-icon success">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2l4-4"/></svg>
-    </div>
-    <h3>Ученик добавлен</h3>
-    <p><strong><?= $createdNm ?: 'Ученик' ?></strong> успешно создан.</p>
-    <div class="modal-actions">
-      <a class="btn" href="/profile/student.php?user_id=<?= $createdId ?>">
-        <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="7" r="4"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg>
-        Карточка ученика
-      </a>
-      <a class="btn btn-ghost" href="/add/student.php">
-        <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Добавить ещё
-      </a>
-      <a class="link" href="/profile/index.php">
-        <svg class="link-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="15 18 9 12 15 6"/></svg>
-        На главную
-      </a>
-    </div>
-    <button class="modal-close" id="modalClose" aria-label="Закрыть">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    </button>
-  </div>
-</div>
-
-<script>
-// модалка
+<script <?= csp_nonce_attr() ?>>
+<?php if ($created): ?>
+window.showActionOk(
+  'Успешно добавлен ученик ' + <?= json_encode((string)($flash['name'] ?? 'Ученик'), JSON_UNESCAPED_UNICODE) ?>,
+  '/profile/student.php?user_id=<?= (int)$createdId ?>'
+);
+<?php endif; ?>
 (function(){
-  const modal = document.getElementById('successModal');
-  const close = document.getElementById('modalClose');
-  if (modal && !modal.hasAttribute('hidden')) document.body.classList.add('noscroll');
-  function hide(){ modal.setAttribute('hidden',''); document.body.classList.remove('noscroll'); }
-  close?.addEventListener('click', hide);
-  window.addEventListener('keydown', e=>{ if(e.key==='Escape' && modal && !modal.hasAttribute('hidden')) hide(); });
-  modal?.addEventListener('click', e => { if (e.target === modal) hide(); });
+  const money = document.getElementById('money');
+  const presets = document.querySelectorAll('.price-preset');
+  function syncPrice(){
+    const v = parseFloat(money?.value);
+    presets.forEach(p => p.classList.toggle('is-active', parseFloat(p.dataset.price) === v));
+  }
+  presets.forEach(p => p.addEventListener('click', () => { money.value = p.dataset.price; syncPrice(); }));
+  money?.addEventListener('input', syncPrice);
+  syncPrice();
 })();
 </script>
 </body>
